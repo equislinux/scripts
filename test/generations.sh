@@ -47,10 +47,15 @@ check "current points at 0001" test "$(xgen_current)" = "0001"
 check "manifest records the cmdline" grep -q 'rootflags=subvol=@' "$X_GEN_DIR/0001/manifest.json"
 check "manifest records the kernel release" grep -q '6.9.0-test' "$X_GEN_DIR/0001/manifest.json"
 check "kernel archived in metadata" test -f "$X_GEN_DIR/0001/boot/vmlinuz-linux"
+check "manifest records the root subvolume" grep -q '"root_subvol": "/fake/0001"' "$X_GEN_DIR/0001/manifest.json"
+
+# From here on, generation 0001 is the running one.
+export X_GEN_RUNNING=0001
 
 echo "== status =="
 STATUS="$(xgen_status)"
-check "status shows the current generation" grep -q '^current:    0001' <<< "$STATUS"
+check "status shows the running generation" grep -q '^running:    0001' <<< "$STATUS"
+check "status shows the default generation" grep -q '^default:    0001' <<< "$STATUS"
 printf 'v2\n' > "$X_GEN_ROOT/etc/app.conf"
 STATUS="$(xgen_status)"
 check "status reports /etc drift" grep -q '^drift:' <<< "$STATUS"
@@ -59,11 +64,12 @@ echo "== second generation =="
 ID2="$(xgen_new test second)"
 check "second generation is 0002" test "$ID2" = "0002"
 check "second records parent 0001" grep -q '"parent": "0001"' "$X_GEN_DIR/0002/manifest.json"
+check "records do not steal the default boot" test "$(xgen_current)" = "0001"
 
 echo "== list =="
 LIST="$(xgen_list)"
 check "list shows 0001" grep -q '^0001 ' <<< "$LIST"
-check "list marks the current one" grep -q '^0002 \*' <<< "$LIST"
+check "list marks the default one" grep -q '^0001 \*' <<< "$LIST"
 
 echo "== restore =="
 xgen_restore 0001 /etc/app.conf "$X_GEN_ROOT/etc/app.conf"
@@ -88,7 +94,7 @@ echo "== CLI =="
 OUT="$(bash "$SRC/bin/x" gen list)"
 check "x gen lists generations" grep -q '0001' <<< "$OUT"
 bash "$SRC/bin/x" gen new --reason test --label third >/dev/null
-check "x gen new creates the next id" test "$(xgen_current)" = "0003"
+check "x gen new records the next id" test -d "$X_GEN_DIR/0003"
 
 UNSUP="$(X_GEN_BACKEND=off bash "$SRC/bin/x" gen list)"
 check "off backend reports unsupported" grep -q 'not supported' <<< "$UNSUP"

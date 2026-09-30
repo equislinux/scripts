@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# x:summary=Creates a generation (immutable snapshot + manifest)
+# x:summary=Records a generation (bootable snapshot + manifest)
 # x:args=[--reason R] [--label L]
 # x:root=false
 set -euo pipefail
@@ -28,4 +28,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 id="$(xgen_new "$REASON" "$LABEL")"
-xgen_log "generation $id created (reason: $REASON${LABEL:+, label: $LABEL})"
+xgen_log "generation $id recorded (reason: $REASON${LABEL:+, label: $LABEL})"
+if [[ "$(xgen_current)" != "$id" ]]; then
+    xgen_log "default boot unchanged; use 'x gen rollback $id' to switch"
+fi

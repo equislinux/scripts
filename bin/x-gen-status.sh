@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# x:summary=Shows the current generation and config drift
+# x:summary=Shows running/default generations, pending rollback and drift
 # x:root=false
 set -euo pipefail
 
