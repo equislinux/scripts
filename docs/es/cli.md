@@ -40,9 +40,10 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x gen status` | Muestra running vs default, rollback pendiente y el drift de `/etc`. |
 | `x gen rollback <id>` | Cambia el default boot a una generación (aplica al reiniciar; `--no-safety`). |
 | `x gen boot` | Regenera las entries de boot por generación. |
-| `x gen diff` | Muestra diferencias de paquetes/servicios/kernel/`/etc` entre dos generaciones. |
+| `x gen diff` | Muestra diferencias de paquetes/servicios/migraciones/kernel/`/etc` entre dos generaciones. |
+| `x gen verify` | Compara el sistema vivo contra una generación (exit 1 con drift). |
 | `x gen pin <id>` | Protege una generación del podado (`--unpin`). |
-| `x gen prune` | Elimina generaciones viejas conservando pinned/running/default (`--keep N`, `--dry-run`). |
+| `x gen prune` | Elimina generaciones viejas conservando pinned/running/default (`--keep N`, `--older-than DAYS`, `--dry-run`). |
 | `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
 | `x gen restore --pkg <name>` | Restaura todos los archivos de un paquete. |
 

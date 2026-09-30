@@ -18,6 +18,7 @@ end of the installation.
 | `/var/lib/x/generations/<id>/manifest.json` | Provenance: reason, parent, tooling, kernel, cmdline, hashes, `root_subvol` |
 | `/var/lib/x/generations/<id>/packages.tsv` | `pacman -Q` capture (or `xpm query` when xpm is the only manager) |
 | `/var/lib/x/generations/<id>/services.txt` | Enabled systemd units |
+| `/var/lib/x/generations/<id>/migrations.txt` | Applied per-user migration markers (`user<TAB>marker`) |
 | `/var/lib/x/generations/<id>/boot/` | Archived kernel/initramfs (used to boot frozen generations) |
 | `/var/lib/x/generations/<id>/snapshot.uuid` | btrfs UUID of the snapshot |
 | `/var/lib/x/generations/<id>/pinned` | Marker: never prune this generation's boot entry |
@@ -48,9 +49,10 @@ generation (it is not captured by the snapshots). The manifest hashes `/etc`
 | `x gen status` | Shows backend, running vs default, pending rollback and `/etc` drift |
 | `x gen rollback <id> [--no-safety]` | Switches the default boot to a generation (applies on reboot) |
 | `x gen boot` | Regenerates the per-generation boot entries |
-| `x gen diff <a> <b>` | Package/services/kernel/`/etc` differences between two generations |
+| `x gen diff <a> <b>` | Package/services/migrations/kernel/`/etc` differences between two generations |
+| `x gen verify [id]` | Compares the live system against a generation (exit 1 on drift) |
 | `x gen pin <id> [--unpin]` | Protects a generation from `x gen prune` |
-| `x gen prune [--keep N] [--dry-run]` | Removes old generations (pinned, running and default always stay) |
+| `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Removes old generations (pinned, running and default always stay) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restores a file or directory from a snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restores every file owned by a package (pacman/xpm db inside the snapshot) |
 
@@ -71,10 +73,15 @@ Restore never clobbers silently: a differing file is moved to
 `x_sync_config` in `install/helpers/sync.sh`).
 
 `x gen diff` compares `packages.tsv` (added/removed/updated versions),
-`services.txt`, the kernel release and the `/etc` hash. `x gen prune` deletes
-metadata, snapshot and boot entry of the generations outside the keep window,
-but **always** keeps pinned, running and default ones; when it removes the
-`pending` target (only possible if it was unpinned), the marker is cleared.
+`services.txt`, `migrations.txt`, the kernel release and the `/etc` hash.
+`x gen verify` runs the same comparison against the **live** system and exits
+non-zero on drift (useful as a scriptable check).
+
+`x gen prune` deletes metadata, snapshot and boot entry of the generations
+outside the keep window, but **always** keeps pinned, running and default ones;
+`--older-than DAYS` additionally protects (and therefore keeps) recent
+generations even when they fall outside the count window. When prune removes
+the `pending` target (only possible if it was unpinned), the marker is cleared.
 
 ## Boot entries and rollback semantics
 
@@ -108,6 +115,21 @@ but **always** keeps pinned, running and default ones; when it removes the
 
 `x gen new` records state; it does not change the default boot (use
 `x gen rollback` for that).
+
+## Pacman transactions
+
+The `x-scripts` package ships two pacman hooks:
+
+| Hook | When | Effect |
+|------|------|--------|
+| `/etc/pacman.d/hooks/10-x-gen-pre.hook` | PreTransaction | Safety generation (`reason: pacman-pre`) |
+| `/etc/pacman.d/hooks/20-x-gen-post.hook` | PostTransaction | Records the result (`reason: pacman`) |
+
+Both call `/usr/share/x/hooks/pacman-gen.sh`, which is a no-op when there is no
+current generation yet (installer/pacstrap), on non-btrfs systems, or when
+`X_GEN_SKIP=1` — exactly what `x update` sets on its own `pacman -Syu` call so
+it can manage its pre/post generations itself. This closes the "kernel updated
+outside `x update`" gap: any manual pacman transaction is captured.
 
 ## Backends and environment
 
@@ -146,6 +168,8 @@ instead of count.
   restore (path and `--pkg`).
 - `test/generations-boot.sh` — boot entries (systemd-boot + GRUB), running vs
   frozen kernels, ESP retention, rollback, pin/unpin, prune, pending state.
+- `test/pacman-hooks.sh` — wrapper guards (no current, `X_GEN_SKIP`), reasons
+  and shipped hook files.
 - `test/generations-btrfs.sh` — real loop-mounted btrfs: `sudo bash
   test/generations-btrfs.sh` (skipped without root).
 

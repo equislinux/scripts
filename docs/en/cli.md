@@ -37,9 +37,10 @@ Summaries are the `x:summary` headers of each file (shown by `x help`).
 | `x gen status` | Shows the running vs default generation, pending rollback and `/etc` drift. |
 | `x gen rollback <id>` | Switches the default boot to a generation (applies on reboot; `--no-safety`). |
 | `x gen boot` | Regenerates the per-generation boot entries. |
-| `x gen diff` | Shows package/service/kernel/`/etc` differences between two generations. |
+| `x gen diff` | Shows package/service/migration/kernel/`/etc` differences between two generations. |
+| `x gen verify` | Compares the live system against a generation (exit 1 on drift). |
 | `x gen pin <id>` | Protects a generation from pruning (`--unpin`). |
-| `x gen prune` | Removes old generations, keeping pinned/running/default (`--keep N`, `--dry-run`). |
+| `x gen prune` | Removes old generations, keeping pinned/running/default (`--keep N`, `--older-than DAYS`, `--dry-run`). |
 | `x gen restore <path>` | Restores a file/directory from a generation (`--from ID`, `--dest PATH`). |
 | `x gen restore --pkg <name>` | Restores every file owned by a package. |
 

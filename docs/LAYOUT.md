@@ -23,6 +23,7 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
 | `config/` | User dotfiles synced to `~/.config` (with backup). `hypr/` is only a documentation entry point + default wallpaper; the desktop config ships offline in the package (`/usr/share/x/config/equisdots`, equisdots org) via `tools/hyprland-install.sh` (ADR-0005). |
 | `migrations/` | Per-user idempotent migrations (`<timestamp>-<name>.sh`), applied by `x migrate`. |
 | `themes/` | Theme store: `themes/<name>/colors` (key=hex), applied by `x theme set`. |
+| `hooks/` | Pacman hook wrappers (installed to `/usr/share/x/hooks`; the `.hook` files live in `etc/pacman.d/hooks/`). |
 | `hardware/` | Self-contained modules: `nvidia.sh`, `qemu.sh`. |
 | `tools/` | Optional per-user toolchains/installers: `node.sh` (fnm), `hyprland-install.sh` (equisdots desktop from the offline snapshot; online fallback via `equisdots/dots`). |
 | `test/` | Local tests without root. |
