@@ -9,7 +9,7 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
 |------|------|
 | `bin/` | `x` CLI (dispatcher + `x-*.sh` subcommands by convention). See `docs/CLI.md`. |
 | `install/` | Provisioning orchestrators per phase. |
-| `install/helpers/` | Bash libraries: `common.sh` (log/privileges/root) and `sync.sh` (idempotent tree sync). |
+| `install/helpers/` | Bash libraries: `common.sh` (log/privileges/root), `sync.sh` (idempotent tree sync) and `xgen.sh` (generations: btrfs snapshot + manifest). |
 | `install/system.sh` | Root entry: chains `config.sh` → `hardware.sh` → `login.sh` → `post-install.sh`. |
 | `install/config.sh` | Root: seeds `/etc/skel` from `skel/` and applies the `/etc` overlay from `etc/`. |
 | `install/hardware.sh` | Root: detects/runs the modules under `hardware/`. |
@@ -34,6 +34,9 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
   missing) → `x_sync_config` with `.bak.<ts>` backup.
 - All scripts are idempotent; files modified by the user are not overwritten
   without leaving a backup.
+- Generations (`x gen`): `x setup` and `x update` create immutable snapshots
+  with a manifest; `x gen restore` recovers paths from them. See
+  `docs/en/generations.md` (or `docs/es/generations.md`).
 
 ## Usage
 

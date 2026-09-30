@@ -66,6 +66,16 @@ X_HYPRLAND=0 bash install/user.sh
   nueva. Idempotente: los archivos sin cambios se dejan igual y no se genera
   un backup extra.
 
+`install/helpers/xgen.sh` — motor de generaciones (snapshot btrfs + manifiesto):
+
+- `xgen_new` — crea una generación (snapshot, manifiesto, capturas de
+  paquetes/servicios, archivo del kernel).
+- `xgen_maybe_new` — hook que usan `x setup` (`install/system.sh`) y
+  `x update`; no-op cuando las generaciones no están soportadas o
+  `X_GEN_SKIP=1`.
+- `xgen_list`/`xgen_status`/`xgen_restore` — inspeccionan generaciones y
+  restauran archivos/directorios. Contrato completo en `generations.md`.
+
 ## Modelo de idempotencia
 
 - Las fases y los helpers están diseñados para re-ejecutarse con seguridad: los

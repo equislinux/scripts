@@ -32,6 +32,10 @@ Summaries are the `x:summary` headers of each file (shown by `x help`).
 | `x update` | `pacman -Syu` (privileged) followed by the user's migrations. |
 | `x hardware` | Runs the hardware phase (detection + modules). Requires root. |
 | `x info` | Shows version, repo, user and environment info. |
+| `x gen` / `x gen list` | Lists the system generations (`*` marks the current one). See `generations.md`. |
+| `x gen new` | Creates a generation: btrfs snapshot + manifest (`--reason`, `--label`). |
+| `x gen status` | Shows the current generation and `/etc` drift. |
+| `x gen restore <path>` | Restores a file/directory from a generation (`--from ID`, `--dest PATH`). |
 
 Root-only commands enforce root inside the dispatcher (see metadata below) and
 print an error if run as a non-root user.
@@ -48,6 +52,7 @@ command file:
 | `info`, `status`, `doctor` | `x-info.sh` |
 | `migrate`, `migrations` | `x-migrate.sh` |
 | `update`, `upgrade`, `up` | `x-update.sh` |
+| `gen`, `generation`, `generations` | `x-gen-list.sh` (so `x gen` lists generations) |
 
 ## Dispatch mechanics
 
@@ -110,6 +115,12 @@ There is no central registry and no registration step.
 | `X_HW_AUTO` | `1` | `0` disables hardware auto-detection in the hardware phase. |
 | `X_HW_NVIDIA` | `0` | `1` forces the NVIDIA module. |
 | `X_HW_QEMU` | `0` | `1` enables the QEMU/libvirt module. |
+| `X_GEN_BACKEND` | `auto` | `auto`, `btrfs`, `dir` (tests/degraded) or `off`. See `generations.md`. |
+| `X_GEN_STATE` / `X_GEN_DIR` / `X_GEN_CURRENT` | `/var/lib/x/...` | Generation state, manifests and current id. |
+| `X_GEN_SNAPSHOTS` | `/.snapshots` | Snapshot store. |
+| `X_GEN_ROOT` | `/` | Tree captured by a generation (tests use a fake root). |
+| `X_GEN_CMDLINE` | `/proc/cmdline` | Kernel cmdline recorded in the manifest. |
+| `X_GEN_SKIP` | `0` | `1` disables automatic generations in the setup/update hooks. |
 
 Hyprland-setup specific variables (`X_HYPR_*`) are documented in
 `hyprland.md`.
@@ -119,6 +130,8 @@ Hyprland-setup specific variables (`X_HYPR_*`) are documented in
 - `~/.local/state/x/` — user state: `theme` (active theme) and
   `migrations/<name>` (applied-migration markers).
 - `~/.config/x/` — generated user config, e.g. `theme.conf`.
+- `/var/lib/x/` — system state: `generations/<id>/` (manifests and captures)
+  and `current` (current generation id); snapshots live in `/.snapshots/`.
 
 The env overrides above let tests and development redirect every state/output
 path away from the real home (see `test/smoke.sh`).

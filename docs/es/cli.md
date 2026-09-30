@@ -35,6 +35,10 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x update` | `pacman -Syu` (privilegiado) seguido de las migraciones del usuario. |
 | `x hardware` | Ejecuta la fase de hardware (detección + módulos). Requiere root. |
 | `x info` | Muestra versión, repo, usuario e info del entorno. |
+| `x gen` / `x gen list` | Lista las generaciones del sistema (`*` marca la actual). Ver `generations.md`. |
+| `x gen new` | Crea una generación: snapshot btrfs + manifiesto (`--reason`, `--label`). |
+| `x gen status` | Muestra la generación actual y el drift de `/etc`. |
+| `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
 
 Los comandos solo-root lo hacen cumplir dentro del dispatcher (ver metadatos
 más abajo) e imprimen un error si se ejecutan como usuario no root.
@@ -51,6 +55,7 @@ Los aliases se definen con el metadato `x:aliases` y permiten que un token
 | `info`, `status`, `doctor` | `x-info.sh` |
 | `migrate`, `migrations` | `x-migrate.sh` |
 | `update`, `upgrade`, `up` | `x-update.sh` |
+| `gen`, `generation`, `generations` | `x-gen-list.sh` (así `x gen` lista las generaciones) |
 
 ## Mecánica del despacho
 
@@ -114,6 +119,12 @@ No hay registro central ni paso de registro.
 | `X_HW_AUTO` | `1` | `0` desactiva la autodetección de hardware en la fase de hardware. |
 | `X_HW_NVIDIA` | `0` | `1` fuerza el módulo NVIDIA. |
 | `X_HW_QEMU` | `0` | `1` habilita el módulo QEMU/libvirt. |
+| `X_GEN_BACKEND` | `auto` | `auto`, `btrfs`, `dir` (tests/degradado) u `off`. Ver `generations.md`. |
+| `X_GEN_STATE` / `X_GEN_DIR` / `X_GEN_CURRENT` | `/var/lib/x/...` | Estado, manifiestos e id actual de las generaciones. |
+| `X_GEN_SNAPSHOTS` | `/.snapshots` | Store de snapshots. |
+| `X_GEN_ROOT` | `/` | Árbol capturado por una generación (los tests usan una raíz falsa). |
+| `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline del kernel registrado en el manifiesto. |
+| `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks de setup/update. |
 
 Las variables específicas del setup de Hyprland (`X_HYPR_*`) se documentan en
 `hyprland.md`.
@@ -123,6 +134,9 @@ Las variables específicas del setup de Hyprland (`X_HYPR_*`) se documentan en
 - `~/.local/state/x/` — estado de usuario: `theme` (tema activo) y
   `migrations/<name>` (marcadores de migración aplicada).
 - `~/.config/x/` — config de usuario generada, p.ej. `theme.conf`.
+- `/var/lib/x/` — estado de sistema: `generations/<id>/` (manifiestos y
+  capturas) y `current` (id de la generación actual); los snapshots viven en
+  `/.snapshots/`.
 
 Los overrides de entorno anteriores permiten que los tests y el desarrollo
 redirijan cada ruta de estado/salida fuera del home real (ver `test/smoke.sh`).
