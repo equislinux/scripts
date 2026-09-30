@@ -152,6 +152,11 @@ check "failed migration is not marked" test ! -f "$X_STATE_DIR/migrations/202609
 
 unset X_MIGRATIONS_DIR
 
+echo "== generations =="
+if ! bash "$SRC/test/generations.sh"; then
+    FAIL=1
+fi
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "smoke: OK"
 else
