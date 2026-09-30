@@ -37,7 +37,9 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x info` | Muestra versión, repo, usuario e info del entorno. |
 | `x gen` / `x gen list` | Lista las generaciones del sistema (`*` marca la actual). Ver `generations.md`. |
 | `x gen new` | Crea una generación: snapshot btrfs + manifiesto (`--reason`, `--label`). |
-| `x gen status` | Muestra la generación actual y el drift de `/etc`. |
+| `x gen status` | Muestra running vs default, rollback pendiente y el drift de `/etc`. |
+| `x gen rollback <id>` | Cambia el default boot a una generación (aplica al reiniciar; `--no-safety`). |
+| `x gen boot` | Regenera las entries de boot por generación. |
 | `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
 
 Los comandos solo-root lo hacen cumplir dentro del dispatcher (ver metadatos
@@ -121,9 +123,13 @@ No hay registro central ni paso de registro.
 | `X_HW_QEMU` | `0` | `1` habilita el módulo QEMU/libvirt. |
 | `X_GEN_BACKEND` | `auto` | `auto`, `btrfs`, `dir` (tests/degradado) u `off`. Ver `generations.md`. |
 | `X_GEN_STATE` / `X_GEN_DIR` / `X_GEN_CURRENT` | `/var/lib/x/...` | Estado, manifiestos e id actual de las generaciones. |
-| `X_GEN_SNAPSHOTS` | `/.snapshots` | Store de snapshots. |
+| `X_GEN_SNAPSHOTS` | `/.snapshots` | Store de snapshots (punto de montaje). |
+| `X_GEN_SUBVOL_PREFIX` | `$X_GEN_SNAPSHOTS` | Ruta in-fs usada por mount/opciones de boot. |
 | `X_GEN_ROOT` | `/` | Árbol capturado por una generación (los tests usan una raíz falsa). |
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline del kernel registrado en el manifiesto. |
+| `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `3` | Gestión y retención de entries de boot. |
+| `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (el instalador usa `/@`). |
+| `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests). |
 | `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks de setup/update. |
 
 Las variables específicas del setup de Hyprland (`X_HYPR_*`) se documentan en

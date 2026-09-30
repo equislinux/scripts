@@ -34,9 +34,10 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
   missing) → `x_sync_config` with `.bak.<ts>` backup.
 - All scripts are idempotent; files modified by the user are not overwritten
   without leaving a backup.
-- Generations (`x gen`): `x setup` and `x update` create immutable snapshots
-  with a manifest; `x gen restore` recovers paths from them. See
-  `docs/en/generations.md` (or `docs/es/generations.md`).
+- Generations (`x gen`): `x setup` and `x update` record bootable snapshots
+  with a manifest; `x gen rollback` switches the default boot and
+  `x gen restore` recovers paths. See `docs/en/generations.md` (or
+  `docs/es/generations.md`).
 
 ## Usage
 
