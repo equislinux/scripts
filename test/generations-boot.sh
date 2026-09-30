@@ -100,6 +100,25 @@ xgen_rollback 0002 --no-safety
 check "selecting the running generation clears pending" test ! -f "$X_GEN_STATE/pending"
 check "default pointer stays on 0002" test "$(xgen_current)" = "0002"
 
+echo "== pin and prune =="
+xgen_pin 0003
+check "pin marker written" test -f "$X_GEN_DIR/0003/pinned"
+xgen_pin 0003 --unpin
+check "unpin removes the marker" test ! -f "$X_GEN_DIR/0003/pinned"
+xgen_pin 0003
+
+DRY="$(xgen_prune 1 1)"
+check "dry-run lists a removable generation" grep -q 'would remove generation 0001' <<< "$DRY"
+check "dry-run removes nothing" test -d "$X_GEN_DIR/0001"
+xgen_prune 1 0 >/dev/null
+check "prune removes the stale generation" test ! -d "$X_GEN_DIR/0001"
+check "prune removes its snapshot" test ! -d "$X_GEN_SNAPSHOTS/0001"
+check "prune removes its ESP entry" test ! -f "$SB/x-gen-0001.conf"
+check "prune removes the other stale generation" test ! -d "$X_GEN_DIR/0004"
+check "pinned generation survives" test -d "$X_GEN_DIR/0003"
+check "running/default generation survives" test -d "$X_GEN_DIR/0002"
+check "newest generation survives" test -d "$X_GEN_DIR/0005"
+
 echo "== CLI =="
 OUT="$(X_GEN_RUNNING=0002 bash "$SRC/bin/x" gen status)"
 check "x gen status via dispatcher" grep -q '^running:    0002' <<< "$OUT"

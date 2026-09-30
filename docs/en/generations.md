@@ -48,19 +48,33 @@ generation (it is not captured by the snapshots). The manifest hashes `/etc`
 | `x gen status` | Shows backend, running vs default, pending rollback and `/etc` drift |
 | `x gen rollback <id> [--no-safety]` | Switches the default boot to a generation (applies on reboot) |
 | `x gen boot` | Regenerates the per-generation boot entries |
+| `x gen diff <a> <b>` | Package/services/kernel/`/etc` differences between two generations |
+| `x gen pin <id> [--unpin]` | Protects a generation from `x gen prune` |
+| `x gen prune [--keep N] [--dry-run]` | Removes old generations (pinned, running and default always stay) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restores a file or directory from a snapshot |
+| `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restores every file owned by a package (pacman/xpm db inside the snapshot) |
 
 ```bash
 sudo x gen new --reason manual --label "before tinkering"
 x gen list
 x gen status
+x gen diff 0001 0003
 sudo x gen rollback 0002        # boot generation 0002 on next reboot
 sudo x gen restore /etc/sddm.conf --from 0002
+sudo x gen restore --pkg kitty --from 0002
+sudo x gen pin 0002             # never prune it
+sudo x gen prune --keep 5 --dry-run
 ```
 
 Restore never clobbers silently: a differing file is moved to
 `<file>.bak.<ts>` before the snapshot version is copied (same contract as
 `x_sync_config` in `install/helpers/sync.sh`).
+
+`x gen diff` compares `packages.tsv` (added/removed/updated versions),
+`services.txt`, the kernel release and the `/etc` hash. `x gen prune` deletes
+metadata, snapshot and boot entry of the generations outside the keep window,
+but **always** keeps pinned, running and default ones; when it removes the
+`pending` target (only possible if it was unpinned), the marker is cleared.
 
 ## Boot entries and rollback semantics
 
@@ -110,6 +124,7 @@ Restore never clobbers silently: a differing file is moved to
 | `X_GEN_BOOT` | `auto` | `on`/`off`/`auto` (auto: enabled with btrfs) |
 | `X_GEN_BOOT_DIR` | `/boot` | ESP path holding kernels and boot entries |
 | `X_GEN_BOOT_KEEP` | `3` | Generations kept in the boot menu |
+| `X_GEN_KEEP` | `5` | Generations kept by `x gen prune` (same rules: pinned/running/default) |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` for the live generation (installer: `/@`) |
 | `X_GEN_RUNNING` | from cmdline | Running generation id (tests) |
 | `X_GEN_SKIP` | `0` | `1` disables automatic generations in hooks |
@@ -119,16 +134,18 @@ no-op; the CLI reports that generations are unavailable.
 
 ## Not implemented yet
 
-`x gen diff`, `x gen prune` (ESP pruning is automatic), explicit `x gen pin`,
-per-user home generations, package-level restore (`--pkg`), xpm/zstd hooks, the
-WSL degraded mode and boot-load-on-selection (rollback is a command, like
-`nixos-rebuild --rollback`).
+Per-user home generations, pacman/xpm transaction hooks, the declarative
+`system.toml` + `x gen apply`, the WSL degraded mode,
+generation export/import (`btrfs send/receive`), boot-load-on-selection
+(rollback is a command, like `nixos-rebuild --rollback`) and retention by time
+instead of count.
 
 ## Tests
 
-- `test/generations.sh` — creation, manifests, list, status/drift, restore.
+- `test/generations.sh` — creation, manifests, list, status/drift, diff,
+  restore (path and `--pkg`).
 - `test/generations-boot.sh` — boot entries (systemd-boot + GRUB), running vs
-  frozen kernels, ESP retention, rollback, pinning, pending state.
+  frozen kernels, ESP retention, rollback, pin/unpin, prune, pending state.
 - `test/generations-btrfs.sh` — real loop-mounted btrfs: `sudo bash
   test/generations-btrfs.sh` (skipped without root).
 

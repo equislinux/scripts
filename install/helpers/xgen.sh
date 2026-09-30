@@ -623,7 +623,7 @@ xgen_rollback() {
     fi
     [[ -f "$(xgen_manifest_path "$target")" ]] || xgen_die "generation $target not found"
 
-    if [[ "$no_safety" != "1" ]]; then
+    if [[ "$no_safety" != "1" && "$no_safety" != "--no-safety" ]]; then
         xgen_new "pre-rollback" "safety" >/dev/null || xgen_die "safety generation failed"
     fi
     running="$(xgen_running_id)"
@@ -638,6 +638,179 @@ xgen_rollback() {
         xgen_log "generation $target selected as default; reboot to apply"
     fi
     return 0
+}
+
+# --- inspection -------------------------------------------------------------
+
+xgen_diff() {
+    local a="$1" b="$2"
+    [[ -n "$a" && -n "$b" ]] || xgen_die "usage: x gen diff <id-a> <id-b>"
+    [[ -f "$(xgen_manifest_path "$a")" ]] || xgen_die "generation $a not found"
+    [[ -f "$(xgen_manifest_path "$b")" ]] || xgen_die "generation $b not found"
+
+    printf 'generation %s -> %s\n\n' "$a" "$b"
+
+    local pa="$X_GEN_DIR/$a/packages.tsv" pb="$X_GEN_DIR/$b/packages.tsv"
+    local diffs=""
+    if [[ -f "$pa" && -f "$pb" ]]; then
+        diffs="$(awk '
+            NR == FNR { av[$1] = $2; next }
+            { bv[$1] = $2 }
+            END {
+                for (n in bv) if (!(n in av)) printf "added\t%s\t%s\n", n, bv[n]
+                for (n in av) if (!(n in bv)) printf "removed\t%s\t%s\n", n, av[n]
+                for (n in av) if ((n in bv) && av[n] != bv[n]) printf "updated\t%s\t%s\t%s\n", n, av[n], bv[n]
+            }' "$pa" "$pb" | LC_ALL=C sort)"
+    fi
+    printf 'packages:\n'
+    if [[ -z "$diffs" ]]; then
+        printf '  (no changes)\n'
+    else
+        while IFS=$'\t' read -r kind n v1 v2; do
+            case "$kind" in
+                added)   printf '  + %s %s\n' "$n" "$v1" ;;
+                removed) printf '  - %s %s\n' "$n" "$v1" ;;
+                updated) printf '  ~ %s %s -> %s\n' "$n" "$v1" "$v2" ;;
+            esac
+        done <<< "$diffs"
+    fi
+    printf '\n'
+
+    local sa="$X_GEN_DIR/$a/services.txt" sb="$X_GEN_DIR/$b/services.txt"
+    printf 'services:\n'
+    if [[ -f "$sa" && -f "$sb" ]]; then
+        local sadded="" sremoved=""
+        sadded="$(comm -13 "$sa" "$sb" 2>/dev/null || true)"
+        sremoved="$(comm -23 "$sa" "$sb" 2>/dev/null || true)"
+        if [[ -z "$sadded$sremoved" ]]; then
+            printf '  (no changes)\n'
+        else
+            local s
+            for s in $sadded; do printf '  + %s\n' "$s"; done
+            for s in $sremoved; do printf '  - %s\n' "$s"; done
+        fi
+    else
+        printf '  (not captured)\n'
+    fi
+    printf '\n'
+
+    local ka kb ha hb
+    ka="$(xgen_manifest_field "$a" release)"
+    kb="$(xgen_manifest_field "$b" release)"
+    printf 'kernel:     %s -> %s\n' "${ka:-?}" "${kb:-?}"
+    ha="$(xgen_manifest_field "$a" etc_sha256)"
+    hb="$(xgen_manifest_field "$b" etc_sha256)"
+    printf '/etc:       %s -> %s\n' "${ha:-?}" "${hb:-?}"
+    printf 'root:       %s -> %s\n' \
+        "$(xgen_manifest_field "$a" root_subvol)" "$(xgen_manifest_field "$b" root_subvol)"
+}
+
+# --- pin and prune ----------------------------------------------------------
+
+xgen_pin() {
+    local id="$1" unpin="${2:-0}"
+    [[ -n "$id" ]] || xgen_die "usage: x gen pin <id> [--unpin]"
+    [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+    if [[ "$unpin" == "1" || "$unpin" == "--unpin" ]]; then
+        rm -f "$(xgen_gen_dir "$id")/pinned"
+        xgen_log "generation $id unpinned"
+    else
+        touch "$(xgen_gen_dir "$id")/pinned"
+        xgen_log "generation $id pinned (never pruned)"
+    fi
+}
+
+xgen_delete_generation() {
+    local id="$1" backend snap
+    backend="$(xgen_backend)"
+    snap="$(xgen_snapshot_path "$id")"
+    case "$backend" in
+        btrfs)
+            [[ "$(id -u)" -eq 0 ]] || xgen_die "prune requires root"
+            if [[ -d "$snap" ]]; then
+                btrfs subvolume delete "$snap" >/dev/null || return 1
+            fi
+            ;;
+        dir)
+            rm -rf "$snap"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    rm -rf "$(xgen_gen_dir "$id")"
+    return 0
+}
+
+# xgen_prune [keep] [dry-run]
+xgen_prune() {
+    local keep_n="${1:-${X_GEN_KEEP:-5}}" dry="${2:-0}"
+    [[ "$keep_n" =~ ^[0-9]+$ ]] || xgen_die "keep must be a number"
+    local backend running cur id
+    backend="$(xgen_backend)"
+    [[ "$backend" != "off" ]] || xgen_die "generations are not supported on this system"
+    if [[ "$backend" == "btrfs" && "$dry" != "1" && "$(id -u)" -ne 0 ]]; then
+        xgen_die "prune requires root"
+    fi
+
+    running="$(xgen_running_id)"
+    cur="$(xgen_current)"
+
+    local ids=()
+    while IFS= read -r id; do
+        [[ -n "$id" ]] && ids+=("$id")
+    done < <(xgen_gen_ids)
+    local total="${#ids[@]}"
+    if [[ "$total" -eq 0 ]]; then
+        xgen_log "no generations to prune"
+        return 0
+    fi
+
+    local first_keep=$((total - keep_n))
+    (( first_keep < 0 )) && first_keep=0
+
+    local -A keep=()
+    if [[ -n "$running" ]]; then keep[$running]=1; fi
+    if [[ -n "$cur" ]]; then keep[$cur]=1; fi
+    local i
+    for (( i = 0; i < total; i++ )); do
+        id="${ids[i]}"
+        if (( i >= first_keep )); then keep[$id]=1; fi
+        if [[ -f "$(xgen_gen_dir "$id")/pinned" ]]; then keep[$id]=1; fi
+    done
+
+    local removed=0
+    for id in "${ids[@]}"; do
+        [[ -n "${keep[$id]:-}" ]] && continue
+        if [[ "$dry" == "1" ]]; then
+            printf 'would remove generation %s\n' "$id"
+        else
+            if xgen_delete_generation "$id"; then
+                printf 'removed generation %s\n' "$id"
+            else
+                xgen_warn "could not remove generation $id"
+                continue
+            fi
+        fi
+        removed=$((removed + 1))
+    done
+
+    if [[ "$dry" != "1" && "$removed" -gt 0 ]]; then
+        xgen_boot_sync
+    fi
+
+    local pending
+    pending="$(xgen_pending)"
+    if [[ -n "$pending" && ! -f "$(xgen_manifest_path "$pending")" ]]; then
+        xgen_pending_clear
+        xgen_warn "pending rollback target $pending no longer exists; marker cleared"
+    fi
+
+    if [[ "$dry" == "1" ]]; then
+        xgen_log "dry-run: $removed generation(s) would be removed (keep=$keep_n)"
+    else
+        xgen_log "$removed generation(s) removed (keep=$keep_n, pinned/running/default kept)"
+    fi
 }
 
 xgen_list() {
@@ -738,28 +911,33 @@ xgen_restore_from() {
     fi
 }
 
+# Mounts a snapshot read-only (btrfs only); echoes the mount dir, empty for
+# the dir backend. The caller must xgen_release_mount it.
+xgen_snapshot_mount() {
+    local id="$1" dev mnt
+    [[ "$(xgen_backend)" == "btrfs" ]] || return 0
+    [[ "$(id -u)" -eq 0 ]] || xgen_die "btrfs restore requires root"
+    dev="$(xgen_root_device)"
+    [[ -n "$dev" ]] || xgen_die "cannot resolve the device of $X_GEN_ROOT"
+    mnt="$(mktemp -d)"
+    mount -o "ro,subvol=$X_GEN_SUBVOL_PREFIX/$id" "$dev" "$mnt" || {
+        rmdir "$mnt" 2>/dev/null || true
+        xgen_die "cannot mount snapshot $id"
+    }
+    printf '%s\n' "$mnt"
+}
+
 xgen_restore() {
     local id="$1" path="$2" dest="${3:-}"
     [[ -n "$id" && -n "$path" ]] || xgen_die "usage: x gen restore <path> [--from ID]"
     [[ -n "$dest" ]] || dest="/${path#/}"
 
-    local backend snap mnt="" src
-    backend="$(xgen_backend)"
-    [[ "$backend" != "off" ]] || xgen_die "generations are not supported on this system"
+    local snap mnt="" root src
     snap="$(xgen_snapshot_path "$id")"
     [[ -d "$snap" ]] || xgen_die "generation $id not found ($snap)"
-
-    if [[ "$backend" == "btrfs" ]]; then
-        [[ "$(id -u)" -eq 0 ]] || xgen_die "btrfs restore requires root"
-        local dev
-        dev="$(xgen_root_device)"
-        [[ -n "$dev" ]] || xgen_die "cannot resolve the device of $X_GEN_ROOT"
-        mnt="$(mktemp -d)"
-        mount -o "ro,subvol=$X_GEN_SUBVOL_PREFIX/$id" "$dev" "$mnt" || xgen_die "cannot mount snapshot $id"
-        src="$mnt/${path#/}"
-    else
-        src="$snap/${path#/}"
-    fi
+    mnt="$(xgen_snapshot_mount "$id")"
+    root="${mnt:-$snap}"
+    src="$root/${path#/}"
 
     if [[ ! -e "$src" ]]; then
         xgen_release_mount "$mnt"
@@ -769,4 +947,54 @@ xgen_restore() {
     xgen_restore_from "$src" "$dest"
     xgen_release_mount "$mnt"
     xgen_log "restored $path from generation $id -> $dest"
+}
+
+# Restores every file of a package using the file list of the package database
+# inside the snapshot (pacman's local db, or xpm's local db).
+xgen_restore_pkg() {
+    local pkg="$1" id="$2" dest="${3:-}"
+    [[ -n "$pkg" && -n "$id" ]] || xgen_die "usage: x gen restore --pkg <name> [--from ID]"
+    [[ "$pkg" != */* ]] || xgen_die "invalid package name: $pkg"
+
+    local snap mnt="" root dbdir files count=0 rel src target prefix
+    snap="$(xgen_snapshot_path "$id")"
+    [[ -d "$snap" ]] || xgen_die "generation $id not found ($snap)"
+    mnt="$(xgen_snapshot_mount "$id")"
+    root="${mnt:-$snap}"
+
+    dbdir="$(find "$root/var/lib/pacman/local" -maxdepth 1 -mindepth 1 -type d -name "$pkg-[0-9]*" 2>/dev/null | LC_ALL=C sort | head -1)" || dbdir=""
+    if [[ -z "$dbdir" && -d "$root/var/lib/xpm/local/$pkg" ]]; then
+        dbdir="$root/var/lib/xpm/local/$pkg"
+    fi
+    if [[ -z "$dbdir" ]]; then
+        xgen_release_mount "$mnt"
+        xgen_die "package $pkg not found in generation $id"
+    fi
+    files="$dbdir/files"
+    if [[ ! -f "$files" ]]; then
+        xgen_release_mount "$mnt"
+        xgen_die "no file list for package $pkg in generation $id"
+    fi
+
+    prefix="${dest%/}"
+    while IFS= read -r rel; do
+        [[ "$rel" == %* ]] && continue
+        [[ -n "$rel" ]] || continue
+        rel="${rel#/}"
+        src="$root/$rel"
+        target="$prefix/$rel"
+        if [[ ! -e "$src" ]]; then
+            xgen_warn "missing in snapshot: /$rel"
+            continue
+        fi
+        if [[ -d "$src" ]]; then
+            mkdir -p "$target"
+        else
+            xgen_restore_file "$src" "$target"
+        fi
+        count=$((count + 1))
+    done < "$files"
+
+    xgen_release_mount "$mnt"
+    xgen_log "restored $count path(s) from package $pkg (generation $id)"
 }

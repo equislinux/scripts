@@ -71,6 +71,18 @@ LIST="$(xgen_list)"
 check "list shows 0001" grep -q '^0001 ' <<< "$LIST"
 check "list marks the default one" grep -q '^0001 \*' <<< "$LIST"
 
+echo "== diff =="
+printf 'kitty 1.0-1\nfoo 2.0-1\n' > "$X_GEN_DIR/0001/packages.tsv"
+printf 'kitty 1.1-1\nbar 3.0-1\n' > "$X_GEN_DIR/0002/packages.tsv"
+printf 'svc-a.service\n' > "$X_GEN_DIR/0001/services.txt"
+printf 'svc-a.service\nsvc-b.service\n' > "$X_GEN_DIR/0002/services.txt"
+DIFF="$(xgen_diff 0001 0002)"
+check "diff shows the updated package" grep -q '~ kitty 1.0-1 -> 1.1-1' <<< "$DIFF"
+check "diff shows the added package" grep -q '+ bar 3.0-1' <<< "$DIFF"
+check "diff shows the removed package" grep -q -- '- foo 2.0-1' <<< "$DIFF"
+check "diff shows the added service" grep -q '+ svc-b.service' <<< "$DIFF"
+check "diff shows the /etc hash change" grep -q '^/etc:' <<< "$DIFF"
+
 echo "== restore =="
 xgen_restore 0001 /etc/app.conf "$X_GEN_ROOT/etc/app.conf"
 check "restore brings the old content back" test "$(cat "$X_GEN_ROOT/etc/app.conf")" = "v1"
@@ -88,6 +100,25 @@ if ( xgen_restore 9999 /etc/app.conf "$TMP/x" ) >/dev/null 2>&1; then
     check "restore of an unknown generation fails" false
 else
     check "restore of an unknown generation fails" true
+fi
+
+echo "== restore --pkg =="
+mkdir -p "$X_GEN_SNAPSHOTS/0001/var/lib/pacman/local/foo-2.0-1" \
+         "$X_GEN_SNAPSHOTS/0001/usr/share/foo" \
+         "$X_GEN_ROOT/usr/share/foo"
+printf '%%FILES%%\nusr/share/foo/\nusr/share/foo/app.conf\n' \
+    > "$X_GEN_SNAPSHOTS/0001/var/lib/pacman/local/foo-2.0-1/files"
+printf 'pkg-snapshot\n' > "$X_GEN_SNAPSHOTS/0001/usr/share/foo/app.conf"
+printf 'pkg-live\n' > "$X_GEN_ROOT/usr/share/foo/app.conf"
+xgen_restore_pkg foo 0001 "$X_GEN_ROOT"
+check "package restore brings the snapshot file back" \
+    test "$(cat "$X_GEN_ROOT/usr/share/foo/app.conf")" = "pkg-snapshot"
+check "package restore keeps a backup" \
+    test -f "$X_GEN_ROOT/usr/share/foo/app.conf.bak.$X_TS"
+if ( xgen_restore_pkg nope 0001 "$X_GEN_ROOT" ) >/dev/null 2>&1; then
+    check "restore of an unknown package fails" false
+else
+    check "restore of an unknown package fails" true
 fi
 
 echo "== CLI =="

@@ -40,7 +40,11 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x gen status` | Muestra running vs default, rollback pendiente y el drift de `/etc`. |
 | `x gen rollback <id>` | Cambia el default boot a una generación (aplica al reiniciar; `--no-safety`). |
 | `x gen boot` | Regenera las entries de boot por generación. |
+| `x gen diff` | Muestra diferencias de paquetes/servicios/kernel/`/etc` entre dos generaciones. |
+| `x gen pin <id>` | Protege una generación del podado (`--unpin`). |
+| `x gen prune` | Elimina generaciones viejas conservando pinned/running/default (`--keep N`, `--dry-run`). |
 | `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
+| `x gen restore --pkg <name>` | Restaura todos los archivos de un paquete. |
 
 Los comandos solo-root lo hacen cumplir dentro del dispatcher (ver metadatos
 más abajo) e imprimen un error si se ejecutan como usuario no root.
@@ -128,6 +132,7 @@ No hay registro central ni paso de registro.
 | `X_GEN_ROOT` | `/` | Árbol capturado por una generación (los tests usan una raíz falsa). |
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline del kernel registrado en el manifiesto. |
 | `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `3` | Gestión y retención de entries de boot. |
+| `X_GEN_KEEP` | `5` | Retención de generaciones para `x gen prune`. |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (el instalador usa `/@`). |
 | `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests). |
 | `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks de setup/update. |
