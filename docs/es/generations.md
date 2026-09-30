@@ -56,6 +56,8 @@ todas las generaciones (los snapshots no los capturan). El manifiesto hashea
 | `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Elimina generaciones viejas (pinned, running y default siempre quedan) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restaura un archivo o directorio desde un snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restaura todos los archivos de un paquete (db pacman/xpm del snapshot) |
+| `x gen export <id> [--out FILE] [--with-data]` | Empaqueta una generación como bundle portable |
+| `x gen import <file> [--force]` | Importa un bundle a `$X_GEN_STATE` (`--force` reemplaza) |
 
 ```bash
 sudo x gen new --reason manual --label "antes de tocar"
@@ -117,6 +119,40 @@ posible si estaba unpinned), limpia el marcador.
 `x gen new` registra estado; no cambia el default boot (para eso está
 `x gen rollback`).
 
+## Export e import
+
+`x gen export <id>` empaqueta los metadatos de la generación (manifiesto,
+capturas, migraciones, kernel archivado) como `tar.zst` (o `tar.gz` sin zstd).
+`--with-data` agrega el snapshot: `btrfs send` en btrfs (root) o copia del
+árbol con backend `dir`. `x gen import <file>` restaura el bundle en
+`$X_GEN_STATE`; la generación importada no se selecciona automáticamente — usá
+`x gen rollback <id>` después. Los duplicados fallan salvo `--force`.
+
+Es la vía de portabilidad: mover una generación entre máquinas o respaldarla
+sin saber de `btrfs send`/`receive`, y la base del modo degradado de WSL.
+
+## Generaciones de home
+
+Las generaciones de sistema cubren el subvolumen raíz; `/home` queda afuera a
+propósito. Una segunda capa, propiedad del usuario, versiona los dotfiles con
+copias de archivos (sin root, sin btrfs, funciona en WSL):
+
+| Comando | Descripción |
+|---------|-------------|
+| `x home` / `x home list` | Lista las generaciones de home (`*` marca la actual) |
+| `x home new [--label L]` | Registra una copia de los dotfiles incluidos |
+| `x home status` | Generación actual y drift |
+| `x home diff <a> <b>` | Diferencias por archivo (agregado/eliminado/cambiado) |
+| `x home restore <path> [--from ID] [--dest PATH]` | Restaura un dotfile (backup `.bak.<ts>`) |
+| `x home prune [--keep N] [--dry-run]` | Elimina generaciones viejas (actual y pinned quedan) |
+
+Store: `~/.local/share/x/home-gens/<id>/` con `manifest.json`, `files/`
+(copia) y `files.sha256` (listado por archivo). Incluye por defecto:
+`.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zshenv`, `.gitconfig` y
+`.config`; se saltean los directorios `Cache`, `CachedData`, `GPUCache` y
+`logs` en cualquier parte del árbol. Las rutas se validan para que un restore
+nunca escape del home.
+
 ## Transacciones de pacman
 
 El paquete `x-scripts` instala dos hooks de pacman:
@@ -173,6 +209,10 @@ por tiempo en lugar de por cantidad.
   pending.
 - `test/pacman-hooks.sh` — guards del wrapper (sin current, `X_GEN_SKIP`),
   reasons y archivos de hook instalados.
+- `test/generations-export.sh` — round-trip export/import (metadata y datos),
+  duplicados y restore desde una generación importada.
+- `test/home-gens.sh` — generaciones de home: captura, exclusiones, drift,
+  diff, restore, rechazo de escape de rutas, prune y despacho por CLI.
 - `test/generations-btrfs.sh` — btrfs real con loop: `sudo bash
   test/generations-btrfs.sh` (se saltea sin root).
 

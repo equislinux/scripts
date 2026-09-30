@@ -55,6 +55,8 @@ generation (it is not captured by the snapshots). The manifest hashes `/etc`
 | `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Removes old generations (pinned, running and default always stay) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restores a file or directory from a snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restores every file owned by a package (pacman/xpm db inside the snapshot) |
+| `x gen export <id> [--out FILE] [--with-data]` | Packs a generation into a portable bundle |
+| `x gen import <file> [--force]` | Imports a bundle into `$X_GEN_STATE` (`--force` replaces) |
 
 ```bash
 sudo x gen new --reason manual --label "before tinkering"
@@ -116,6 +118,41 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
 `x gen new` records state; it does not change the default boot (use
 `x gen rollback` for that).
 
+## Export and import
+
+`x gen export <id>` packs the generation metadata (manifest, captures,
+migrations, archived kernel) as `tar.zst` (or `tar.gz` without zstd).
+`--with-data` adds the snapshot itself: `btrfs send` on btrfs (root) or a tree
+copy with the `dir` backend. `x gen import <file>` restores the bundle into
+`$X_GEN_STATE`; the imported generation is not selected automatically — use
+`x gen rollback <id>` after importing. Duplicates fail unless `--force`.
+
+This is the portability path: moving a generation between machines or backing
+it up without `btrfs send`/`receive` knowledge, and the base for the WSL
+degraded mode.
+
+## Home generations
+
+System generations cover the root subvolume; `/home` stays out of them on
+purpose. A second, user-owned layer versions the dotfiles with plain file
+copies (no root, no btrfs, works on WSL):
+
+| Command | Description |
+|---------|-------------|
+| `x home` / `x home list` | Lists home generations (`*` marks the current one) |
+| `x home new [--label L]` | Records a copy of the included dotfiles |
+| `x home status` | Current generation and drift |
+| `x home diff <a> <b>` | Per-file differences (added/removed/changed) |
+| `x home restore <path> [--from ID] [--dest PATH]` | Restores a dotfile (`.bak.<ts>` backup) |
+| `x home prune [--keep N] [--dry-run]` | Removes old generations (current and pinned stay) |
+
+Store: `~/.local/share/x/home-gens/<id>/` with `manifest.json`, `files/`
+(copy) and `files.sha256` (per-file listing). Default include list:
+`.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zshenv`, `.gitconfig` and
+`.config`; directory names `Cache`, `CachedData`, `GPUCache` and `logs` are
+skipped anywhere in the tree. Paths are validated so a restore can never
+escape the home.
+
 ## Pacman transactions
 
 The `x-scripts` package ships two pacman hooks:
@@ -170,6 +207,10 @@ instead of count.
   frozen kernels, ESP retention, rollback, pin/unpin, prune, pending state.
 - `test/pacman-hooks.sh` — wrapper guards (no current, `X_GEN_SKIP`), reasons
   and shipped hook files.
+- `test/generations-export.sh` — export/import round-trip (metadata and data),
+  duplicate handling and restore from an imported generation.
+- `test/home-gens.sh` — home generations: capture, exclusions, drift, diff,
+  restore, path-escape rejection, prune and CLI dispatch.
 - `test/generations-btrfs.sh` — real loop-mounted btrfs: `sudo bash
   test/generations-btrfs.sh` (skipped without root).
 

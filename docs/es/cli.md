@@ -46,6 +46,9 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x gen prune` | Elimina generaciones viejas conservando pinned/running/default (`--keep N`, `--older-than DAYS`, `--dry-run`). |
 | `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
 | `x gen restore --pkg <name>` | Restaura todos los archivos de un paquete. |
+| `x gen export` / `x gen import` | Empaqueta/restaura un bundle de generación (`--with-data`, `--force`). |
+| `x home` / `x home list` | Lista las generaciones de home del usuario (dotfiles). |
+| `x home new` / `status` / `diff` / `restore` / `prune` | Ciclo de vida de las generaciones de home. Ver `generations.md`. |
 
 Los comandos solo-root lo hacen cumplir dentro del dispatcher (ver metadatos
 más abajo) e imprimen un error si se ejecutan como usuario no root.
@@ -134,6 +137,9 @@ No hay registro central ni paso de registro.
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline del kernel registrado en el manifiesto. |
 | `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `3` | Gestión y retención de entries de boot. |
 | `X_GEN_KEEP` | `5` | Retención de generaciones para `x gen prune`. |
+| `X_HGEN_STATE` / `X_HGEN_HOME` | `~/.local/share/x/home-gens` / `$HOME` | Store y home capturado de las generaciones de home. |
+| `X_HGEN_INCLUDE` / `X_HGEN_EXCLUDE` | dotfiles + `.config` / `Cache CachedData GPUCache logs` | Rutas capturadas por `x home new`. |
+| `X_HGEN_KEEP` | `10` | Retención de generaciones de home para `x home prune`. |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (el instalador usa `/@`). |
 | `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests). |
 | `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks de setup/update. |
