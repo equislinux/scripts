@@ -582,7 +582,8 @@ xgen_new() {
     xgen_capture_services "$dir/services.txt"
     xgen_capture_kernel "$id" || xgen_warn "kernel capture incomplete"
     oldcur="$(xgen_current)"
-    parent="$oldcur"
+    parent="$(xgen_running_id)"
+    [[ -n "$parent" ]] || parent="$oldcur"
     root_subvol="$(xgen_default_subvol "$id")"
     xgen_write_manifest "$id" "$parent" "$reason" "$label" "$pkg_backend" "$root_subvol"
     xgen_snapshot_create "$id" || xgen_die "snapshot failed for generation $id"
@@ -674,15 +675,20 @@ xgen_status() {
         xgen_supported || printf 'status:     generations unavailable (no btrfs on %s)\n' "$X_GEN_ROOT"
         return 0
     fi
-    dir="$(xgen_gen_dir "$cur")"
-    printf 'created:    %s\n' "$(xgen_manifest_field "$cur" created)"
-    printf 'reason:     %s\n' "$(xgen_manifest_field "$cur" reason)"
-    printf 'label:      %s\n' "$(xgen_manifest_field "$cur" label)"
-    printf 'snapshot:   %s\n' "$(xgen_snapshot_path "$cur")"
+    # Drift is measured against the running generation when it is known.
+    local ref="$cur"
+    if [[ -n "$running" && -f "$(xgen_manifest_path "$running")" ]]; then
+        ref="$running"
+    fi
+    dir="$(xgen_gen_dir "$ref")"
+    printf 'created:    %s\n' "$(xgen_manifest_field "$ref" created)"
+    printf 'reason:     %s\n' "$(xgen_manifest_field "$ref" reason)"
+    printf 'label:      %s\n' "$(xgen_manifest_field "$ref" label)"
+    printf 'snapshot:   %s\n' "$(xgen_snapshot_path "$ref")"
     then_hash="$(sed -n 's/.*"etc_sha256": *"\([^"]*\)".*/\1/p' "$dir/manifest.json" 2>/dev/null | head -1)"
     now_hash="$(xgen_hash_tree "$X_GEN_ROOT/etc" 2>/dev/null || true)"
     if [[ -n "$then_hash" && "$then_hash" != "n/a" && -n "$now_hash" && "$then_hash" != "$now_hash" ]]; then
-        printf 'drift:      /etc changed since generation %s (x gen new)\n' "$cur"
+        printf 'drift:      /etc changed since generation %s (x gen new)\n' "$ref"
     fi
 }
 
