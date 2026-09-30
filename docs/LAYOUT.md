@@ -9,7 +9,7 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
 |------|------|
 | `bin/` | `x` CLI (dispatcher + `x-*.sh` subcommands by convention). See `docs/CLI.md`. |
 | `install/` | Provisioning orchestrators per phase. |
-| `install/helpers/` | Bash libraries: `common.sh` (log/privileges/root), `sync.sh` (idempotent tree sync) and `xgen.sh` (generations: btrfs snapshot + manifest). |
+| `install/helpers/` | Bash libraries: `common.sh` (log/privileges/root), `sync.sh` (idempotent tree sync), `xgen.sh` (system generations: btrfs snapshot + manifest) and `xgen-home.sh` (home generations: dotfile copies). |
 | `install/system.sh` | Root entry: chains `config.sh` → `hardware.sh` → `login.sh` → `post-install.sh`. |
 | `install/config.sh` | Root: seeds `/etc/skel` from `skel/` and applies the `/etc` overlay from `etc/`. |
 | `install/hardware.sh` | Root: detects/runs the modules under `hardware/`. |
