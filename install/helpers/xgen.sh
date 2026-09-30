@@ -520,6 +520,28 @@ xgen_boot_sync() {
         xgen_capture_kernel "$running" 2>/dev/null || true
     fi
 
+    # Bootable kept generations (kernel available); the default is the current
+    # one when bootable, else the newest bootable entry.
+    local bootable_ids=()
+    for id in "${keep_ids[@]}"; do
+        [[ -n "${keep[$id]:-}" ]] || continue
+        if [[ "$id" == "$running" ]]; then
+            bootable_ids+=("$id")
+        elif [[ -n "$(xgen_pick_kernel "$id")" && -n "$(xgen_pick_initrd "$id")" ]]; then
+            bootable_ids+=("$id")
+        fi
+    done
+    local def="" def_lin="" def_initrd="" def_cmd=""
+    if [[ "${#bootable_ids[@]}" -gt 0 ]]; then
+        def="${bootable_ids[${#bootable_ids[@]}-1]}"
+        for id in "${bootable_ids[@]}"; do
+            if [[ "$id" == "$cur" ]]; then
+                def="$cur"
+                break
+            fi
+        done
+    fi
+
     mkdir -p "$bootdir/x"
     local entries="" lin initrd cmd title kfile ifile dest
     for id in "${keep_ids[@]}"; do
@@ -557,6 +579,11 @@ xgen_boot_sync() {
         cmd="$(xgen_cmdline_for_gen "$id")"
         title="X Linux (gen $id, $(xgen_manifest_field "$id" reason))"
         title="${title//\"/\'}"
+        if [[ -n "$def" && "$id" == "$def" ]]; then
+            def_lin="$lin"
+            def_initrd="$initrd"
+            def_cmd="$cmd"
+        fi
         if [[ "$have_sb" -eq 1 ]]; then
             {
                 printf 'title   %s\n' "$title"
@@ -585,16 +612,7 @@ menuentry \"$title\" --id x-gen-$id {
         fi
     done
 
-    # Defaults: prefer the current generation, else the newest entry.
-    local def="$cur"
-    if [[ "$have_sb" -eq 1 && ! -f "$sb_dir/x-gen-$def.conf" ]]; then
-        for id in "${keep_ids[@]}"; do
-            if [[ -f "$sb_dir/x-gen-$id.conf" ]]; then
-                def="$id"
-            fi
-        done
-    fi
-    if [[ "$have_sb" -eq 1 && -f "$sb_dir/x-gen-$def.conf" ]]; then
+    if [[ "$have_sb" -eq 1 && -n "$def" ]]; then
         if [[ -f "$bootdir/loader/loader.conf" ]]; then
             sed -i "s|^default .*|default x-gen-$def.conf|" "$bootdir/loader/loader.conf"
             if ! grep -q '^default ' "$bootdir/loader/loader.conf"; then
@@ -604,11 +622,27 @@ menuentry \"$title\" --id x-gen-$id {
             printf 'default x-gen-%s.conf\ntimeout 5\nconsole-mode max\n' "$def" > "$bootdir/loader/loader.conf"
         fi
         cp -f "$sb_dir/x-gen-$def.conf" "$sb_dir/x.conf"
+        if [[ -n "$def_lin" ]]; then
+            {
+                printf 'title   X Linux (rescue)\n'
+                printf 'linux   %s\n' "$def_lin"
+                printf 'initrd  %s\n' "$def_initrd"
+                printf 'options %s systemd.unit=rescue.target\n' "$def_cmd"
+            } > "$sb_dir/x-rescue.conf"
+        fi
     fi
     if [[ "$have_grub" -eq 1 ]]; then
         {
-            printf 'set default=x-gen-%s\n' "$def"
+            if [[ -n "$def" ]]; then
+                printf 'set default=x-gen-%s\n' "$def"
+            fi
             printf '%s\n' "$entries"
+            if [[ -n "$def_lin" ]]; then
+                printf '\nmenuentry "X Linux (rescue)" --id x-rescue {\n'
+                printf '    linux %s %s systemd.unit=rescue.target\n' "$def_lin" "$def_cmd"
+                printf '    initrd %s\n' "$def_initrd"
+                printf '}\n'
+            fi
         } > "$grub_dir/custom.cfg"
     fi
     return 0
@@ -1034,8 +1068,9 @@ xgen_prune() {
 }
 
 xgen_list() {
-    local dir id label reason created cur found=0
+    local dir id label reason created cur running markers found=0
     cur="$(xgen_current)"
+    running="$(xgen_running_id)"
     printf '%-6s %-20s %-12s %s\n' "ID" "CREATED" "REASON" "LABEL"
     for dir in "$X_GEN_DIR"/[0-9]*; do
         [[ -d "$dir" ]] || continue
@@ -1043,8 +1078,18 @@ xgen_list() {
         created="$(xgen_manifest_field "$id" created)"
         reason="$(xgen_manifest_field "$id" reason)"
         label="$(xgen_manifest_field "$id" label)"
+        markers=""
         if [[ "$id" == "$cur" ]]; then
-            id="$id *"
+            markers="${markers}*"
+        fi
+        if [[ "$id" == "$running" ]]; then
+            markers="${markers}r"
+        fi
+        if [[ -f "$(xgen_gen_dir "$id")/pinned" ]]; then
+            markers="${markers}p"
+        fi
+        if [[ -n "$markers" ]]; then
+            id="$id $markers"
         fi
         printf '%-6s %-20s %-12s %s\n' "$id" "${created:-?}" "${reason:-?}" "$label"
         found=1
@@ -1090,6 +1135,13 @@ xgen_status() {
     done
     printf 'snapshots:  %s in %s\n' "$n_snaps" "$X_GEN_SNAPSHOTS"
     printf 'entries:    %s in %s\n' "$n_entries" "$X_GEN_BOOT_DIR"
+    if [[ "$backend" == "btrfs" ]] && command -v btrfs >/dev/null 2>&1; then
+        local usage=""
+        usage="$(btrfs filesystem du -s "$X_GEN_SNAPSHOTS" 2>/dev/null | tail -1 | awk '{print $1}')" || usage=""
+        if [[ -n "$usage" ]]; then
+            printf 'usage:      %s in snapshots\n' "$usage"
+        fi
+    fi
     then_hash="$(sed -n 's/.*"etc_sha256": *"\([^"]*\)".*/\1/p' "$dir/manifest.json" 2>/dev/null | head -1)"
     now_hash="$(xgen_hash_tree "$X_GEN_ROOT/etc" 2>/dev/null || true)"
     if [[ -n "$then_hash" && "$then_hash" != "n/a" && -n "$now_hash" && "$then_hash" != "$now_hash" ]]; then
@@ -1234,7 +1286,50 @@ xgen_import() {
     xgen_log "generation $id imported ('x gen rollback $id' to select it)"
 }
 
-# --- granular restore -------------------------------------------------------
+# Machine-readable status (single JSON line).
+xgen_status_json() {
+    local backend cur running pending ref dir then_hash now_hash drift="false"
+    local n_snaps=0 n_entries=0 d created reason label snapshot
+    backend="$(xgen_backend)"
+    cur="$(xgen_current)"
+    running="$(xgen_running_id)"
+    pending="$(xgen_pending)"
+    ref="$cur"
+    if [[ -n "$running" && -f "$(xgen_manifest_path "$running")" ]]; then
+        ref="$running"
+    fi
+    if [[ -n "$ref" ]]; then
+        dir="$(xgen_gen_dir "$ref")"
+        created="$(xgen_manifest_field "$ref" created)"
+        reason="$(xgen_manifest_field "$ref" reason)"
+        label="$(xgen_manifest_field "$ref" label)"
+        snapshot="$(xgen_snapshot_path "$ref")"
+        then_hash="$(sed -n 's/.*"etc_sha256": *"\([^"]*\)".*/\1/p' "$dir/manifest.json" 2>/dev/null | head -1)"
+        now_hash="$(xgen_hash_tree "$X_GEN_ROOT/etc" 2>/dev/null || true)"
+        if [[ -n "$then_hash" && "$then_hash" != "n/a" && -n "$now_hash" && "$then_hash" != "$now_hash" ]]; then
+            drift="true"
+        fi
+    fi
+    for d in "$X_GEN_SNAPSHOTS"/[0-9]*; do
+        [[ -e "$d" ]] || continue
+        n_snaps=$((n_snaps + 1))
+    done
+    for d in "$X_GEN_BOOT_DIR"/loader/entries/x-gen-*.conf; do
+        [[ -e "$d" ]] || continue
+        n_entries=$((n_entries + 1))
+    done
+    printf '{"schema":1,"backend":"%s","running":"%s","default":"%s","pending":%s,"created":"%s","reason":"%s","label":"%s","snapshot":"%s","snapshots":%s,"entries":%s,"drift":%s}\n' \
+        "$backend" \
+        "$(xgen_json_str "$running")" \
+        "$(xgen_json_str "$cur")" \
+        "$(if [[ -n "$pending" ]]; then printf '"%s"' "$(xgen_json_str "$pending")"; else printf 'null'; fi)" \
+        "$(xgen_json_str "$created")" \
+        "$(xgen_json_str "$reason")" \
+        "$(xgen_json_str "$label")" \
+        "$(xgen_json_str "$snapshot")" \
+        "$n_snaps" "$n_entries" "$drift"
+}
+
 
 xgen_backup_if_differs() {
     local from="$1" to="$2" ts="${X_TS:-$(date +%Y%m%d%H%M%S)}"

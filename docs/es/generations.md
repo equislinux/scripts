@@ -47,7 +47,7 @@ todas las generaciones (los snapshots no los capturan). El manifiesto hashea
 |---------|-------------|
 | `x gen` / `x gen list` | Lista las generaciones; `*` marca la default (actual) |
 | `x gen new [--reason R] [--label L]` | Registra una generación (snapshot + manifiesto + entry de boot) |
-| `x gen status` | Muestra backend, running vs default, rollback pendiente y drift de `/etc` |
+| `x gen status [--json]` | Muestra backend, running vs default, rollback pendiente y drift de `/etc` |
 | `x gen rollback <id> [--no-safety]` | Cambia el default boot a una generación (aplica al reiniciar) |
 | `x gen boot` | Regenera las entries de boot por generación |
 | `x gen diff <a> <b>` | Diferencias de paquetes/servicios/migraciones/kernel/`/etc` entre dos generaciones |
@@ -90,7 +90,7 @@ posible si estaba unpinned), limpia el marcador.
 
 - Una entry por generación retenida en el menú (GRUB: `custom.cfg`;
   systemd-boot: `loader/entries/x-gen-<id>.conf`), más `x.conf` espejando la
-  default.
+  default y una entry `x-rescue` (mismo kernel, `systemd.unit=rescue.target`).
 - La generación **running** bootea el kernel vivo del ESP (`/vmlinuz-linux`)
   porque su raíz muta in-place (las actualizaciones mantienen los módulos en
   sync). Las generaciones **congeladas** bootean su copia archivada
@@ -141,7 +141,7 @@ copias de archivos (sin root, sin btrfs, funciona en WSL):
 |---------|-------------|
 | `x home` / `x home list` | Lista las generaciones de home (`*` marca la actual) |
 | `x home new [--label L]` | Registra una copia de los dotfiles incluidos |
-| `x home status` | Generación actual y drift |
+| `x home status [--json]` | Generación actual y drift |
 | `x home diff <a> <b>` | Diferencias por archivo (agregado/eliminado/cambiado) |
 | `x home restore <path> [--from ID] [--dest PATH]` | Restaura un dotfile (backup `.bak.<ts>`) |
 | `x home prune [--keep N] [--dry-run]` | Elimina generaciones viejas (actual y pinned quedan) |
@@ -197,13 +197,40 @@ capturada.
 En un sistema no-btrfs (o WSL) `xgen_supported` es falso y cada hook es un
 no-op; la CLI reporta que las generaciones no están disponibles.
 
+## Sistema declarativo (diseño, no implementado)
+
+La capa final buscada es estilo `configuration.nix`: un `system.toml`
+reconciliado con `x gen plan` / `x gen apply`:
+
+```toml
+[system]
+hostname = "x"
+timezone = "UTC"
+locale = "en_US.UTF-8"
+
+[packages]
+explicit = ["kitty", "neovim"]
+
+[services]
+enable = ["NetworkManager"]
+
+[theme]
+name = "x-dark"
+```
+
+`x gen plan system.toml` imprimiría las acciones (instalar/eliminar/habilitar/
+deshabilitar/tema) y `x gen apply` las ejecutaría vía pacman/systemctl y
+registraría una generación cuyo manifiesto guarda el hash del archivo.
+Decisiones abiertas para cuando la base esté validada: política de eliminación
+de paquetes fuera de la declaración y cómo interactúa `apply` con un rollback
+pendiente.
+
 ## Todavía no implementado
 
-Generaciones del home por usuario, hooks de transacción de pacman/xpm, el
-`system.toml` declarativo + `x gen apply`, el modo degradado de WSL,
-export/import de generaciones (`btrfs send/receive`), boot por selección en el
-menú (el rollback es un comando, como `nixos-rebuild --rollback`) y retención
-por tiempo en lugar de por cantidad.
+El `system.toml` declarativo + `x gen apply` (diseño arriba), boot por
+selección en el menú (el rollback es un comando, como
+`nixos-rebuild --rollback`), UKIs con Secure Boot y el límite de espacio con
+qgroups de btrfs.
 
 ## Tests
 

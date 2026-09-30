@@ -215,6 +215,29 @@ hgen_status() {
     fi
 }
 
+hgen_status_json() {
+    local cur dir then_hash now_hash drift="false" created label paths
+    cur="$(hgen_current)"
+    if [[ -n "$cur" ]]; then
+        dir="$(hgen_gen_dir "$cur")"
+        created="$(hgen_field "$cur" created)"
+        label="$(hgen_field "$cur" label)"
+        paths="$(hgen_field "$cur" paths)"
+        then_hash="$(sed -n 's/.*"sha256": *"\([^"]*\)".*/\1/p' "$dir/manifest.json" 2>/dev/null | head -1)"
+        now_hash="$(hgen_listing | sha256sum | cut -d' ' -f1)"
+        if [[ -n "$then_hash" && "$then_hash" != "$now_hash" ]]; then
+            drift="true"
+        fi
+    fi
+    printf '{"schema":1,"store":"%s","home":"%s","current":"%s","created":"%s","label":"%s","paths":%s,"drift":%s}\n' \
+        "$(hgen_json_str "$X_HGEN_STATE")" \
+        "$(hgen_json_str "$X_HGEN_HOME")" \
+        "$(hgen_json_str "$cur")" \
+        "$(hgen_json_str "$created")" \
+        "$(hgen_json_str "$label")" \
+        "${paths:-0}" "$drift"
+}
+
 hgen_diff() {
     local a="$1" b="$2"
     [[ -f "$(hgen_manifest_path "$a")" && -f "$(hgen_manifest_path "$b")" ]] \

@@ -46,7 +46,7 @@ generation (it is not captured by the snapshots). The manifest hashes `/etc`
 |---------|-------------|
 | `x gen` / `x gen list` | Lists generations; `*` marks the default (current) one |
 | `x gen new [--reason R] [--label L]` | Records a generation (snapshot + manifest + boot entry) |
-| `x gen status` | Shows backend, running vs default, pending rollback and `/etc` drift |
+| `x gen status [--json]` | Shows backend, running vs default, pending rollback and `/etc` drift |
 | `x gen rollback <id> [--no-safety]` | Switches the default boot to a generation (applies on reboot) |
 | `x gen boot` | Regenerates the per-generation boot entries |
 | `x gen diff <a> <b>` | Package/services/migrations/kernel/`/etc` differences between two generations |
@@ -89,7 +89,7 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
 
 - One entry per kept generation in the boot menu (GRUB: `custom.cfg`,
   systemd-boot: `loader/entries/x-gen-<id>.conf`), plus `x.conf` mirroring the
-  default one.
+  default one and an `x-rescue` entry (same kernel, `systemd.unit=rescue.target`).
 - The **running** generation boots the live kernel from the ESP (`/vmlinuz-linux`)
   because its root mutates in place (updates keep modules in sync). **Frozen**
   generations boot their archived kernel copy (`/boot/x/gen-<id>/...`), which
@@ -141,7 +141,7 @@ copies (no root, no btrfs, works on WSL):
 |---------|-------------|
 | `x home` / `x home list` | Lists home generations (`*` marks the current one) |
 | `x home new [--label L]` | Records a copy of the included dotfiles |
-| `x home status` | Current generation and drift |
+| `x home status [--json]` | Current generation and drift |
 | `x home diff <a> <b>` | Per-file differences (added/removed/changed) |
 | `x home restore <path> [--from ID] [--dest PATH]` | Restores a dotfile (`.bak.<ts>` backup) |
 | `x home prune [--keep N] [--dry-run]` | Removes old generations (current and pinned stay) |
@@ -196,13 +196,38 @@ outside `x update`" gap: any manual pacman transaction is captured.
 On a non-btrfs system (or WSL) `xgen_supported` is false and every hook is a
 no-op; the CLI reports that generations are unavailable.
 
+## Declarative system (design, not implemented)
+
+The intended final layer mirrors `configuration.nix`: a `system.toml`
+reconciled with `x gen plan` / `x gen apply`:
+
+```toml
+[system]
+hostname = "x"
+timezone = "UTC"
+locale = "en_US.UTF-8"
+
+[packages]
+explicit = ["kitty", "neovim"]
+
+[services]
+enable = ["NetworkManager"]
+
+[theme]
+name = "x-dark"
+```
+
+`x gen plan system.toml` would print the actions (install/remove/enable/
+disable/theme) and `x gen apply` would execute them through pacman/systemctl
+and record a generation whose manifest stores the file hash. Open decisions
+for when the base is validated: removal policy for packages outside the
+declaration, and how `apply` interacts with a pending rollback.
+
 ## Not implemented yet
 
-Per-user home generations, pacman/xpm transaction hooks, the declarative
-`system.toml` + `x gen apply`, the WSL degraded mode,
-generation export/import (`btrfs send/receive`), boot-load-on-selection
-(rollback is a command, like `nixos-rebuild --rollback`) and retention by time
-instead of count.
+The declarative `system.toml` + `x gen apply` (design above), boot
+load-on-selection (rollback is a command, like `nixos-rebuild --rollback`),
+SELinux/secure-boot UKIs and the disk-space limit via btrfs qgroups.
 
 ## Tests
 

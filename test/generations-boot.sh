@@ -58,6 +58,9 @@ check "loader default points at 0001" grep -q '^default x-gen-0001.conf' "$X_GEN
 check "x.conf mirrors the default entry" grep -q 'gen 0001' "$X_GEN_BOOT_DIR/loader/entries/x.conf"
 check "grub entry written" grep -q 'menuentry "X Linux (gen 0001, install)" --id x-gen-0001' "$GRUB/custom.cfg"
 check "grub default points at 0001" grep -q '^set default=x-gen-0001' "$GRUB/custom.cfg"
+check "rescue entry written" test -f "$SB/x-rescue.conf"
+check "rescue entry targets rescue mode" grep -q 'systemd.unit=rescue.target' "$SB/x-rescue.conf"
+check "grub rescue entry written" grep -q -- '--id x-rescue' "$GRUB/custom.cfg"
 
 echo "== frozen generations =="
 export X_GEN_RUNNING=0001
