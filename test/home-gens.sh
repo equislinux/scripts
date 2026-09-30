@@ -79,6 +79,19 @@ check "x home restore works" grep -q alias "$TMP/cli-bashrc"
 OUT="$(bash "$SRC/bin/x" home status)"
 check "x home status works" grep -q '^current:    0003' <<< "$OUT"
 
+echo "== flow hooks =="
+export HOME="$TMP/hook-home"
+export X_SKEL_DIR="$TMP/empty-skel"
+export X_CONFIG_SEED="$TMP/empty-conf"
+mkdir -p "$HOME" "$X_SKEL_DIR" "$X_CONFIG_SEED"
+bash "$SRC/install/user-seed.sh" >/dev/null
+check "user seed records a pre-setup home generation" test -d "$X_HGEN_STATE/0004"
+check "setup hook labels the generation" grep -q '"label": "pre-setup"' "$X_HGEN_STATE/0004/manifest.json"
+NEXT="$(hgen_id_next)"
+X_HGEN_SKIP=1 bash "$SRC/install/user-seed.sh" >/dev/null
+check "X_HGEN_SKIP disables the setup hook" test "$(hgen_id_next)" = "$NEXT"
+check "x update captures a pre-update home generation" grep -q 'home_generation "pre-update"' "$SRC/bin/x-update.sh"
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "home-gens: OK"
 else

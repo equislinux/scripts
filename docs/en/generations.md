@@ -146,6 +146,11 @@ copies (no root, no btrfs, works on WSL):
 | `x home restore <path> [--from ID] [--dest PATH]` | Restores a dotfile (`.bak.<ts>` backup) |
 | `x home prune [--keep N] [--dry-run]` | Removes old generations (current and pinned stay) |
 
+Home generations are recorded automatically too (best effort, never blocks
+provisioning): `x setup --user` records `pre-setup` before seeding/syncing
+dotfiles, and `x update` records `pre-update` before migrations.
+`X_HGEN_SKIP=1` disables the automatic captures.
+
 Store: `~/.local/share/x/home-gens/<id>/` with `manifest.json`, `files/`
 (copy) and `files.sha256` (per-file listing). Default include list:
 `.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zshenv`, `.gitconfig` and

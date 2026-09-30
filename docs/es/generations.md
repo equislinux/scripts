@@ -146,6 +146,11 @@ copias de archivos (sin root, sin btrfs, funciona en WSL):
 | `x home restore <path> [--from ID] [--dest PATH]` | Restaura un dotfile (backup `.bak.<ts>`) |
 | `x home prune [--keep N] [--dry-run]` | Elimina generaciones viejas (actual y pinned quedan) |
 
+Las generaciones de home también se registran automáticamente (best effort,
+nunca bloquean el aprovisionamiento): `x setup --user` registra `pre-setup`
+antes de sembrar/sincronizar dotfiles, y `x update` registra `pre-update`
+antes de las migraciones. `X_HGEN_SKIP=1` desactiva las capturas automáticas.
+
 Store: `~/.local/share/x/home-gens/<id>/` con `manifest.json`, `files/`
 (copia) y `files.sha256` (listado por archivo). Incluye por defecto:
 `.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zshenv`, `.gitconfig` y

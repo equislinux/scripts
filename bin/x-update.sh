@@ -22,6 +22,19 @@ generation() { # reason label
     fi
 }
 
+home_generation() { # label
+    local label="$1"
+    if [[ "${X_HGEN_SKIP:-0}" == "1" ]]; then
+        return 0
+    fi
+    if [[ "$(id -u)" -eq 0 && -n "${SUDO_USER:-}" ]]; then
+        runuser -u "$SUDO_USER" -- bash "$X_BIN/x-home-new.sh" --label "$label" >/dev/null 2>&1 || true
+    elif [[ "$(id -u)" -ne 0 ]]; then
+        bash "$X_BIN/x-home-new.sh" --label "$label" >/dev/null 2>&1 || true
+    fi
+    return 0
+}
+
 run_privileged() {
     if [[ "$(id -u)" -eq 0 ]]; then
         "$@"
@@ -33,6 +46,7 @@ run_privileged() {
 }
 
 generation "pre-update" "safety"
+home_generation "pre-update"
 
 if command -v pacman >/dev/null 2>&1; then
     echo "x update: syncing repos and updating"
