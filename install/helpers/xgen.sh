@@ -1097,6 +1097,143 @@ xgen_status() {
     fi
 }
 
+# --- export and import ------------------------------------------------------
+
+# Packs a generation into a portable bundle (metadata always; snapshot data
+# with --with-data). The archive is tar.zst when zstd is available, tar.gz
+# otherwise.
+xgen_export() {
+    local id="$1" out="${2:-}" with_data="${3:-0}"
+    [[ -n "$id" ]] || xgen_die "usage: x gen export <id> [--out FILE] [--with-data]"
+    [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    cp -a "$(xgen_gen_dir "$id")/." "$tmpdir/"
+    rm -f "$tmpdir/pinned"
+
+    {
+        printf 'schema=1\n'
+        printf 'id=%s\n' "$id"
+        printf 'hostname=%s\n' "$(xgen_manifest_field "$id" hostname)"
+        printf 'created=%s\n' "$(xgen_manifest_field "$id" created)"
+        printf 'exported=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        printf 'root_subvol=%s\n' "$(xgen_manifest_field "$id" root_subvol)"
+        printf 'with_data=%s\n' "$with_data"
+    } > "$tmpdir/BUNDLE.txt"
+
+    if [[ "$with_data" == "1" ]]; then
+        case "$(xgen_backend)" in
+            btrfs)
+                [[ "$(id -u)" -eq 0 ]] || { rm -rf "$tmpdir"; xgen_die "btrfs data export requires root"; }
+                local ro="$X_GEN_SNAPSHOTS/.export-$id"
+                btrfs subvolume delete "$ro" >/dev/null 2>&1 || true
+                btrfs subvolume snapshot -r "$(xgen_snapshot_path "$id")" "$ro" >/dev/null \
+                    || { rm -rf "$tmpdir"; xgen_die "cannot snapshot $id for export"; }
+                if ! btrfs send "$ro" > "$tmpdir/snapshot.btrfs"; then
+                    btrfs subvolume delete "$ro" >/dev/null 2>&1 || true
+                    rm -rf "$tmpdir"
+                    xgen_die "btrfs send failed for generation $id"
+                fi
+                btrfs subvolume delete "$ro" >/dev/null 2>&1 || true
+                ;;
+            dir)
+                cp -a "$(xgen_snapshot_path "$id")" "$tmpdir/snapshot"
+                ;;
+        esac
+    fi
+
+    if [[ -z "$out" ]]; then
+        local stamp
+        stamp="$(date -u +%Y%m%d)"
+        if command -v zstd >/dev/null 2>&1; then
+            out="x-gen-$id-$stamp.tar.zst"
+        else
+            out="x-gen-$id-$stamp.tar.gz"
+        fi
+    fi
+
+    if command -v zstd >/dev/null 2>&1 && [[ "$out" == *.tar.zst ]]; then
+        tar -C "$tmpdir" -cf - . | zstd -q -3 -o "$out" || { rm -rf "$tmpdir"; xgen_die "export failed"; }
+    else
+        tar -czf "$out" -C "$tmpdir" . || { rm -rf "$tmpdir"; xgen_die "export failed"; }
+    fi
+    rm -rf "$tmpdir"
+    xgen_log "generation $id exported to $out"
+}
+
+# Imports a bundle created by xgen_export. Data is imported only when present
+# in the bundle (btrfs: `btrfs receive`, dir: tree copy).
+xgen_import() {
+    local file="$1" force="${2:-0}"
+    [[ -f "$file" ]] || xgen_die "bundle not found: $file"
+
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    case "$file" in
+        *.tar.zst)
+            command -v zstd >/dev/null 2>&1 || { rm -rf "$tmpdir"; xgen_die "zstd is required for $file"; }
+            zstd -q -dc "$file" | tar -C "$tmpdir" -xf - || { rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
+            ;;
+        *.tar.gz|*.tgz)
+            tar -xzf "$file" -C "$tmpdir" || { rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
+            ;;
+        *.tar)
+            tar -xf "$file" -C "$tmpdir" || { rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
+            ;;
+        *)
+            rm -rf "$tmpdir"
+            xgen_die "unknown bundle format: $file (expected .tar.zst, .tar.gz or .tar)"
+            ;;
+    esac
+
+    local id
+    id="$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "$tmpdir/manifest.json" 2>/dev/null | head -1)"
+    if [[ -z "$id" ]]; then
+        rm -rf "$tmpdir"
+        xgen_die "invalid bundle: no generation id in manifest.json"
+    fi
+
+    local dir
+    dir="$(xgen_gen_dir "$id")"
+    if [[ -e "$dir" && "$force" != "1" ]]; then
+        rm -rf "$tmpdir"
+        xgen_die "generation $id already exists (use --force to replace it)"
+    fi
+
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    cp -a "$tmpdir/." "$dir/"
+    rm -f "$dir/BUNDLE.txt"
+
+    if [[ -f "$tmpdir/snapshot.btrfs" ]]; then
+        [[ "$(xgen_backend)" == "btrfs" ]] || xgen_warn "btrfs data in the bundle but the backend is not btrfs; snapshot skipped"
+        if [[ "$(xgen_backend)" == "btrfs" ]]; then
+            [[ "$(id -u)" -eq 0 ]] || { rm -rf "$tmpdir"; xgen_die "btrfs data import requires root"; }
+            mkdir -p "$X_GEN_SNAPSHOTS"
+            if btrfs receive "$X_GEN_SNAPSHOTS" < "$tmpdir/snapshot.btrfs" >/dev/null 2>&1; then
+                # btrfs receive preserves the sent name (.export-<id>):
+                # replace any previous subvolume and rename it to the id.
+                if [[ -e "$X_GEN_SNAPSHOTS/$id" ]]; then
+                    btrfs subvolume delete "$X_GEN_SNAPSHOTS/$id" >/dev/null 2>&1 || true
+                fi
+                if [[ -e "$X_GEN_SNAPSHOTS/.export-$id" ]]; then
+                    mv "$X_GEN_SNAPSHOTS/.export-$id" "$X_GEN_SNAPSHOTS/$id" 2>/dev/null || true
+                fi
+            else
+                xgen_warn "btrfs receive failed; metadata imported without snapshot data"
+            fi
+        fi
+    elif [[ -d "$tmpdir/snapshot" ]]; then
+        mkdir -p "$X_GEN_SNAPSHOTS"
+        rm -rf "$X_GEN_SNAPSHOTS/$id"
+        cp -a "$tmpdir/snapshot" "$X_GEN_SNAPSHOTS/$id"
+    fi
+
+    rm -rf "$tmpdir"
+    xgen_log "generation $id imported ('x gen rollback $id' to select it)"
+}
+
 # --- granular restore -------------------------------------------------------
 
 xgen_backup_if_differs() {

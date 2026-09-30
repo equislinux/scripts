@@ -162,6 +162,12 @@ fi
 if ! bash "$SRC/test/pacman-hooks.sh"; then
     FAIL=1
 fi
+if ! bash "$SRC/test/generations-export.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/home-gens.sh"; then
+    FAIL=1
+fi
 
 if [[ "$FAIL" -eq 0 ]]; then
     echo "smoke: OK"
