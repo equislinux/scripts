@@ -37,6 +37,8 @@ printf 'testhost\n' > "$X_GEN_ROOT/etc/hostname"
 printf 'v1\n' > "$X_GEN_ROOT/etc/app.conf"
 printf 'kernel\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
 printf 'initrd\n' > "$X_GEN_ROOT/boot/initramfs-linux.img"
+mkdir -p "$X_GEN_ROOT/home/user/.local/state/x/migrations"
+: > "$X_GEN_ROOT/home/user/.local/state/x/migrations/20260101000000-alpha"
 
 echo "== creation =="
 ID="$(xgen_new test first)"
@@ -48,6 +50,8 @@ check "manifest records the cmdline" grep -q 'rootflags=subvol=@' "$X_GEN_DIR/00
 check "manifest records the kernel release" grep -q '6.9.0-test' "$X_GEN_DIR/0001/manifest.json"
 check "kernel archived in metadata" test -f "$X_GEN_DIR/0001/boot/vmlinuz-linux"
 check "manifest records the root subvolume" grep -q '"root_subvol": "/fake/0001"' "$X_GEN_DIR/0001/manifest.json"
+check "manifest records migrations" grep -q '"migrations": {"count": 1}' "$X_GEN_DIR/0001/manifest.json"
+check "migrations capture lists the marker" grep -q 'user	20260101000000-alpha' "$X_GEN_DIR/0001/migrations.txt"
 
 # From here on, generation 0001 is the running one.
 export X_GEN_RUNNING=0001
@@ -61,10 +65,22 @@ STATUS="$(xgen_status)"
 check "status reports /etc drift" grep -q '^drift:' <<< "$STATUS"
 
 echo "== second generation =="
+: > "$X_GEN_ROOT/home/user/.local/state/x/migrations/20260102000000-beta"
 ID2="$(xgen_new test second)"
 check "second generation is 0002" test "$ID2" = "0002"
 check "second records parent 0001" grep -q '"parent": "0001"' "$X_GEN_DIR/0002/manifest.json"
 check "records do not steal the default boot" test "$(xgen_current)" = "0001"
+
+echo "== verify =="
+check "verify matches the generation" xgen_verify 0002
+: > "$X_GEN_ROOT/home/user/.local/state/x/migrations/20260103000000-gamma"
+VERIFY_OUT="$(xgen_verify 0002 2>&1 || true)"
+check "verify reports the migration drift" grep -q '+ user 20260103000000-gamma' <<< "$VERIFY_OUT"
+if xgen_verify 0002 >/dev/null 2>&1; then
+    check "verify exits non-zero on drift" false
+else
+    check "verify exits non-zero on drift" true
+fi
 
 echo "== list =="
 LIST="$(xgen_list)"
@@ -81,6 +97,7 @@ check "diff shows the updated package" grep -q '~ kitty 1.0-1 -> 1.1-1' <<< "$DI
 check "diff shows the added package" grep -q '+ bar 3.0-1' <<< "$DIFF"
 check "diff shows the removed package" grep -q -- '- foo 2.0-1' <<< "$DIFF"
 check "diff shows the added service" grep -q '+ svc-b.service' <<< "$DIFF"
+check "diff shows the added migration" grep -q '+ user 20260102000000-beta' <<< "$DIFF"
 check "diff shows the /etc hash change" grep -q '^/etc:' <<< "$DIFF"
 
 echo "== restore =="
@@ -129,6 +146,20 @@ check "x gen new records the next id" test -d "$X_GEN_DIR/0003"
 
 UNSUP="$(X_GEN_BACKEND=off bash "$SRC/bin/x" gen list)"
 check "off backend reports unsupported" grep -q 'not supported' <<< "$UNSUP"
+
+echo "== prune by age =="
+sed -i 's/"created": ".*"/"created": "2000-01-01T00:00:00Z"/' "$X_GEN_DIR/0002/manifest.json"
+DRY="$(xgen_prune 0 1 7)"
+check "dry-run lists the old generation" grep -q 'would remove generation 0002' <<< "$DRY"
+if grep -q 'would remove generation 0003' <<< "$DRY"; then
+    check "dry-run keeps the fresh generation" false
+else
+    check "dry-run keeps the fresh generation" true
+fi
+xgen_prune 0 0 7 >/dev/null
+check "old generation removed" test ! -d "$X_GEN_DIR/0002"
+check "fresh generation kept by age" test -d "$X_GEN_DIR/0003"
+check "running generation kept" test -d "$X_GEN_DIR/0001"
 
 if [[ "$FAIL" -eq 0 ]]; then
     echo "generations: OK"

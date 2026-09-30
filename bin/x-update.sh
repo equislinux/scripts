@@ -36,7 +36,9 @@ generation "pre-update" "safety"
 
 if command -v pacman >/dev/null 2>&1; then
     echo "x update: syncing repos and updating"
-    if ! run_privileged pacman -Syu --noconfirm; then
+    # X_GEN_SKIP=1 makes the pacman hook (etc/pacman.d/hooks/20-x-gen-post)
+    # skip: x update records its own pre/post generations around the update.
+    if ! run_privileged env X_GEN_SKIP=1 pacman -Syu --noconfirm; then
         xgen_warn "pacman failed; the pre-update generation was kept for recovery"
         exit 1
     fi

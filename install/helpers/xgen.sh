@@ -205,6 +205,26 @@ xgen_capture_services() {
     fi
 }
 
+# Captures the applied-migration markers of every user home under X_GEN_ROOT
+# (`<user>\t<marker>` lines). Markers live in ~/.local/state/x/migrations, so
+# they are not part of the root snapshot; the manifest records them.
+xgen_capture_migrations() {
+    local out="$1" home user m
+    : > "$out"
+    for home in "$X_GEN_ROOT/root" "$X_GEN_ROOT"/home/*; do
+        [[ -d "$home/.local/state/x/migrations" ]] || continue
+        if [[ "$home" == "$X_GEN_ROOT/root" ]]; then
+            user="root"
+        else
+            user="$(basename "$home")"
+        fi
+        while IFS= read -r m; do
+            [[ -n "$m" ]] || continue
+            printf '%s\t%s\n' "$user" "$m"
+        done < <(find "$home/.local/state/x/migrations" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | LC_ALL=C sort)
+    done | LC_ALL=C sort > "$out"
+}
+
 xgen_capture_kernel() {
     local id="$1" dest f
     dest="$(xgen_gen_dir "$id")/boot"
@@ -228,7 +248,7 @@ xgen_manifest_field() {
 xgen_write_manifest() {
     local id="$1" parent="$2" reason="$3" label="$4" pkg_backend="${5:-none}" root_subvol="${6:-}"
     local dir created hostname kernel cmdline etc_hash
-    local pkg_count pkg_hash svc_count
+    local pkg_count pkg_hash svc_count mig_count
     dir="$(xgen_gen_dir "$id")"
     mkdir -p "$dir"
     created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -243,6 +263,8 @@ xgen_write_manifest() {
     [[ -n "$pkg_hash" ]] || pkg_hash="n/a"
     svc_count="$(wc -l < "$dir/services.txt" 2>/dev/null | tr -d ' ')"
     [[ -n "$svc_count" ]] || svc_count=0
+    mig_count="$(wc -l < "$dir/migrations.txt" 2>/dev/null | tr -d ' ')"
+    [[ -n "$mig_count" ]] || mig_count=0
 
     {
         printf '{\n'
@@ -265,7 +287,8 @@ xgen_write_manifest() {
         printf '  "cmdline": "%s",\n' "$(xgen_json_str "$cmdline")"
         printf '  "configs": {"etc_sha256": "%s"},\n' "$etc_hash"
         printf '  "packages": {"count": %s, "sha256": "%s"},\n' "$pkg_count" "$pkg_hash"
-        printf '  "services": {"count": %s}\n' "$svc_count"
+        printf '  "services": {"count": %s},\n' "$svc_count"
+        printf '  "migrations": {"count": %s}\n' "$mig_count"
         printf '}\n'
     } > "$dir/manifest.json"
 }
@@ -425,6 +448,24 @@ xgen_pick_initrd() {
     return 0
 }
 
+xgen_pick_boot_kernel() {
+    local f
+    f="$(find "$X_GEN_BOOT_DIR" -maxdepth 1 -name 'vmlinuz-*' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || f=""
+    if [[ -n "$f" ]]; then
+        printf '%s\n' "$f"
+    fi
+    return 0
+}
+
+xgen_pick_boot_initrd() {
+    local f
+    f="$(find "$X_GEN_BOOT_DIR" -maxdepth 1 -name 'initramfs-*.img' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || f=""
+    if [[ -n "$f" ]]; then
+        printf '%s\n' "$f"
+    fi
+    return 0
+}
+
 xgen_boot_sync() {
     local force="${1:-}"
     xgen_boot_enabled || return 0
@@ -484,8 +525,21 @@ xgen_boot_sync() {
     for id in "${keep_ids[@]}"; do
         [[ -n "${keep[$id]:-}" ]] || continue
         if [[ "$id" == "$running" ]]; then
-            lin="/vmlinuz-linux"
-            initrd="/initramfs-linux.img"
+            # The running generation boots the live ESP kernel (its root
+            # mutates in place); name it from the ESP, whatever kernel it is.
+            local bootk booti
+            bootk="$(xgen_pick_boot_kernel)"
+            booti="$(xgen_pick_boot_initrd)"
+            if [[ -n "$bootk" ]]; then
+                lin="/${bootk##*/}"
+            else
+                lin="/vmlinuz-linux"
+            fi
+            if [[ -n "$booti" ]]; then
+                initrd="/${booti##*/}"
+            else
+                initrd="/initramfs-linux.img"
+            fi
         else
             kfile="$(xgen_pick_kernel "$id")"
             ifile="$(xgen_pick_initrd "$id")"
@@ -580,6 +634,7 @@ xgen_new() {
     mkdir -p "$dir"
     pkg_backend="$(xgen_capture_packages "$dir/packages.tsv")"
     xgen_capture_services "$dir/services.txt"
+    xgen_capture_migrations "$dir/migrations.txt"
     xgen_capture_kernel "$id" || xgen_warn "kernel capture incomplete"
     oldcur="$(xgen_current)"
     parent="$(xgen_running_id)"
@@ -694,6 +749,31 @@ xgen_diff() {
     fi
     printf '\n'
 
+    local ma="$X_GEN_DIR/$a/migrations.txt" mb="$X_GEN_DIR/$b/migrations.txt"
+    printf 'migrations:\n'
+    if [[ -f "$ma" && -f "$mb" ]]; then
+        local madded mremoved mm
+        madded="$(comm -13 "$ma" "$mb" 2>/dev/null || true)"
+        mremoved="$(comm -23 "$ma" "$mb" 2>/dev/null || true)"
+        if [[ -z "$madded$mremoved" ]]; then
+            printf '  (no changes)\n'
+        else
+            while IFS= read -r mm; do
+                if [[ -n "$mm" ]]; then
+                    printf '  + %s\n' "$(printf '%s' "$mm" | tr '\t' ' ')"
+                fi
+            done <<< "$madded"
+            while IFS= read -r mm; do
+                if [[ -n "$mm" ]]; then
+                    printf '  - %s\n' "$(printf '%s' "$mm" | tr '\t' ' ')"
+                fi
+            done <<< "$mremoved"
+        fi
+    else
+        printf '  (not captured)\n'
+    fi
+    printf '\n'
+
     local ka kb ha hb
     ka="$(xgen_manifest_field "$a" release)"
     kb="$(xgen_manifest_field "$b" release)"
@@ -703,6 +783,129 @@ xgen_diff() {
     printf '/etc:       %s -> %s\n' "${ha:-?}" "${hb:-?}"
     printf 'root:       %s -> %s\n' \
         "$(xgen_manifest_field "$a" root_subvol)" "$(xgen_manifest_field "$b" root_subvol)"
+}
+
+# Compares the live system against a generation's captures. Returns 0 when
+# they match and 1 on drift (with a report).
+xgen_verify() {
+    local id="${1:-$(xgen_current)}" drift=0
+    [[ -n "$id" ]] || xgen_die "no generation to verify; pass an id"
+    [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+
+    printf 'verifying live system against generation %s\n\n' "$id"
+
+    local tmpdir live_pkgs live_svc live_mig
+    tmpdir="$(mktemp -d)"
+    live_pkgs="$tmpdir/packages.tsv"
+    live_svc="$tmpdir/services.txt"
+    live_mig="$tmpdir/migrations.txt"
+    xgen_capture_packages "$live_pkgs" >/dev/null
+    xgen_capture_services "$live_svc"
+    xgen_capture_migrations "$live_mig"
+
+    local gen_pkgs="$X_GEN_DIR/$id/packages.tsv"
+    printf 'packages:\n'
+    if [[ -f "$gen_pkgs" ]]; then
+        local pkgs_diff count
+        pkgs_diff="$(awk '
+            NR == FNR { gv[$1] = $2; next }
+            { lv[$1] = $2 }
+            END {
+                for (n in lv) if (!(n in gv)) printf "added\t%s\t%s\n", n, lv[n]
+                for (n in gv) if (!(n in lv)) printf "missing\t%s\t%s\n", n, gv[n]
+                for (n in gv) if ((n in lv) && gv[n] != lv[n]) printf "changed\t%s\t%s\t%s\n", n, gv[n], lv[n]
+            }' "$gen_pkgs" "$live_pkgs" | LC_ALL=C sort)"
+        if [[ -z "$pkgs_diff" ]]; then
+            printf '  (match)\n'
+        else
+            local kind n v1 v2
+            while IFS=$'\t' read -r kind n v1 v2; do
+                [[ -n "$kind" ]] || continue
+                case "$kind" in
+                    added)   printf '  + %s %s\n' "$n" "$v1" ;;
+                    missing) printf '  - %s %s\n' "$n" "$v1" ;;
+                    changed) printf '  ~ %s %s -> %s\n' "$n" "$v1" "$v2" ;;
+                esac
+            done <<< "$pkgs_diff"
+            count="$(printf '%s\n' "$pkgs_diff" | grep -c . || true)"
+            drift=$((drift + count))
+        fi
+    else
+        printf '  (not captured)\n'
+    fi
+    printf '\n'
+
+    local gen_svc="$X_GEN_DIR/$id/services.txt"
+    printf 'services:\n'
+    if [[ -f "$gen_svc" ]]; then
+        local sadded smissing count
+        sadded="$(comm -13 "$gen_svc" "$live_svc" 2>/dev/null || true)"
+        smissing="$(comm -23 "$gen_svc" "$live_svc" 2>/dev/null || true)"
+        if [[ -z "$sadded$smissing" ]]; then
+            printf '  (match)\n'
+        else
+            local s
+            while IFS= read -r s; do [[ -n "$s" ]] && printf '  + %s\n' "$s"; done <<< "$sadded"
+            while IFS= read -r s; do [[ -n "$s" ]] && printf '  - %s\n' "$s"; done <<< "$smissing"
+            count="$(printf '%s\n%s\n' "$sadded" "$smissing" | grep -c . || true)"
+            drift=$((drift + count))
+        fi
+    else
+        printf '  (not captured)\n'
+    fi
+    printf '\n'
+
+    local gen_mig="$X_GEN_DIR/$id/migrations.txt"
+    printf 'migrations:\n'
+    if [[ -f "$gen_mig" ]]; then
+        local madded mmissing count mm
+        madded="$(comm -13 "$gen_mig" "$live_mig" 2>/dev/null || true)"
+        mmissing="$(comm -23 "$gen_mig" "$live_mig" 2>/dev/null || true)"
+        if [[ -z "$madded$mmissing" ]]; then
+            printf '  (match)\n'
+        else
+            while IFS= read -r mm; do
+                if [[ -n "$mm" ]]; then
+                    printf '  + %s\n' "$(printf '%s' "$mm" | tr '\t' ' ')"
+                fi
+            done <<< "$madded"
+            while IFS= read -r mm; do
+                if [[ -n "$mm" ]]; then
+                    printf '  - %s\n' "$(printf '%s' "$mm" | tr '\t' ' ')"
+                fi
+            done <<< "$mmissing"
+            count="$(printf '%s\n%s\n' "$madded" "$mmissing" | grep -c . || true)"
+            drift=$((drift + count))
+        fi
+    else
+        printf '  (not captured)\n'
+    fi
+    printf '\n'
+
+    local then_hash now_hash then_kernel now_kernel
+    then_hash="$(xgen_manifest_field "$id" etc_sha256)"
+    now_hash="$(xgen_hash_tree "$X_GEN_ROOT/etc" 2>/dev/null || true)"
+    printf '/etc sha256: %s\n' "$then_hash"
+    if [[ -n "$then_hash" && "$then_hash" != "n/a" && -n "$now_hash" && "$then_hash" != "$now_hash" ]]; then
+        printf '             live: %s (changed)\n' "$now_hash"
+        drift=$((drift + 1))
+    fi
+    then_kernel="$(xgen_manifest_field "$id" release)"
+    now_kernel="$(xgen_kernel_release)"
+    printf 'kernel:      %s\n' "$then_kernel"
+    if [[ -n "$then_kernel" && "$then_kernel" != "$now_kernel" ]]; then
+        printf '             live: %s (changed)\n' "$now_kernel"
+        drift=$((drift + 1))
+    fi
+
+    rm -rf "$tmpdir"
+
+    if [[ "$drift" -eq 0 ]]; then
+        xgen_log "live system matches generation $id"
+        return 0
+    fi
+    xgen_warn "$drift difference(s) against generation $id"
+    return 1
 }
 
 # --- pin and prune ----------------------------------------------------------
@@ -742,11 +945,22 @@ xgen_delete_generation() {
     return 0
 }
 
-# xgen_prune [keep] [dry-run]
+# xgen_prune [keep] [dry-run] [older-than-days]
+#
+# A generation is removed only when it is outside the newest `keep` window,
+# older than `older-than-days` (when > 0) and not pinned/running/default.
 xgen_prune() {
-    local keep_n="${1:-${X_GEN_KEEP:-5}}" dry="${2:-0}"
+    local keep_n="${1:-${X_GEN_KEEP:-5}}" dry="${2:-0}" older_days="${3:-0}"
     [[ "$keep_n" =~ ^[0-9]+$ ]] || xgen_die "keep must be a number"
+    [[ "$older_days" =~ ^[0-9]+$ ]] || xgen_die "older-than must be a number of days"
     local backend running cur id
+    local cutoff=""
+    if (( older_days > 0 )); then
+        cutoff="$(date -u -d "@$(( $(date +%s) - older_days * 86400 ))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)"
+        if [[ -z "$cutoff" ]]; then
+            xgen_warn "cannot compute the age cutoff; ignoring --older-than"
+        fi
+    fi
     backend="$(xgen_backend)"
     [[ "$backend" != "off" ]] || xgen_die "generations are not supported on this system"
     if [[ "$backend" == "btrfs" && "$dry" != "1" && "$(id -u)" -ne 0 ]]; then
@@ -772,11 +986,17 @@ xgen_prune() {
     local -A keep=()
     if [[ -n "$running" ]]; then keep[$running]=1; fi
     if [[ -n "$cur" ]]; then keep[$cur]=1; fi
-    local i
+    local i created
     for (( i = 0; i < total; i++ )); do
         id="${ids[i]}"
         if (( i >= first_keep )); then keep[$id]=1; fi
         if [[ -f "$(xgen_gen_dir "$id")/pinned" ]]; then keep[$id]=1; fi
+        if [[ -n "$cutoff" ]]; then
+            created="$(xgen_manifest_field "$id" created)"
+            if [[ -n "$created" && "$created" > "$cutoff" ]]; then
+                keep[$id]=1
+            fi
+        fi
     done
 
     local removed=0
@@ -858,6 +1078,18 @@ xgen_status() {
     printf 'reason:     %s\n' "$(xgen_manifest_field "$ref" reason)"
     printf 'label:      %s\n' "$(xgen_manifest_field "$ref" label)"
     printf 'snapshot:   %s\n' "$(xgen_snapshot_path "$ref")"
+
+    local n_snaps=0 n_entries=0 d
+    for d in "$X_GEN_SNAPSHOTS"/[0-9]*; do
+        [[ -e "$d" ]] || continue
+        n_snaps=$((n_snaps + 1))
+    done
+    for d in "$X_GEN_BOOT_DIR"/loader/entries/x-gen-*.conf; do
+        [[ -e "$d" ]] || continue
+        n_entries=$((n_entries + 1))
+    done
+    printf 'snapshots:  %s in %s\n' "$n_snaps" "$X_GEN_SNAPSHOTS"
+    printf 'entries:    %s in %s\n' "$n_entries" "$X_GEN_BOOT_DIR"
     then_hash="$(sed -n 's/.*"etc_sha256": *"\([^"]*\)".*/\1/p' "$dir/manifest.json" 2>/dev/null | head -1)"
     now_hash="$(xgen_hash_tree "$X_GEN_ROOT/etc" 2>/dev/null || true)"
     if [[ -n "$then_hash" && "$then_hash" != "n/a" && -n "$now_hash" && "$then_hash" != "$now_hash" ]]; then

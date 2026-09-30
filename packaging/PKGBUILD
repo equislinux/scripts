@@ -14,7 +14,7 @@ package() {
     local dest="$pkgdir/usr/share/x"
     install -d "$dest" "$pkgdir/usr/bin"
 
-    for d in bin install skel etc config hardware tools migrations themes; do
+    for d in bin install skel etc config hardware tools migrations themes hooks; do
         [ -e "$startdir/../$d" ] && cp -a "$startdir/../$d" "$dest/"
     done
 
@@ -28,7 +28,7 @@ package() {
         cp -a "$startdir/.vendor/x-config/." "$dest/config/"
     fi
 
-    find "$dest/bin" "$dest/install" "$dest/hardware" "$dest/tools" -type f \( -name '*.sh' -o -name 'x' \) -exec chmod +x {} +
+    find "$dest/bin" "$dest/install" "$dest/hardware" "$dest/tools" "$dest/hooks" -type f \( -name '*.sh' -o -name 'x' \) -exec chmod +x {} +
 
     ln -s /usr/share/x/bin/x "$pkgdir/usr/bin/x"
 }

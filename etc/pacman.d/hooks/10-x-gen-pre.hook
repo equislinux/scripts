@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Recording a safety x generation...
+When = PreTransaction
+Exec = /usr/share/x/hooks/pacman-gen.sh pre
