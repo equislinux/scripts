@@ -24,8 +24,12 @@ out of scope for packaging (see the packaging doc and the workspace ROADMAP).
 ## What this repo provides
 
 - `install/` — phase orchestrators for system (root) and user provisioning,
-  with idempotent sync helpers.
-- `bin/` — the `x` CLI (dispatcher + subcommands by naming convention).
+  with idempotent sync helpers and the generation engines (`xgen.sh` for
+  system snapshots, `xgen-home.sh` for dotfile generations).
+- `bin/` — the `x` CLI (dispatcher + subcommands by naming convention),
+  including `x gen ...` and `x home ...`.
+- `hooks/` — pacman hook wrappers (`pacman-gen.sh`) referenced by the
+  `etc/pacman.d/hooks/` drop-ins.
 - `skel/`, `etc/`, `config/` — dotfile seeds for `/etc/skel`, `/etc`
   drop-ins and user configs.
 - `hardware/`, `tools/` — optional modules (NVIDIA, QEMU/libvirt, node) and
@@ -46,9 +50,12 @@ into a provisioned x machine:
    services).
 2. The user phase seeds the home, syncs dotfiles and provisions the desktop
    (Hyprland stack) **offline** from a vendored config snapshot.
-3. `x` is the day-to-day CLI for themes, migrations and updates.
+3. `x` is the day-to-day CLI for themes, migrations and updates, plus
+   **generations**: `x gen` versions the system (bootable snapshots, rollback,
+   granular restore) and `x home` versions the user's dotfiles.
 
-See `cli.md`, `provisioning.md`, `hyprland.md` and `packaging.md`.
+See `cli.md`, `provisioning.md`, `generations.md`, `hyprland.md` and
+`packaging.md`.
 
 ## Configuration sources
 

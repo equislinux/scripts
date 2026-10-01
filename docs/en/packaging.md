@@ -9,9 +9,12 @@ currently out of scope for packaging; see the workspace ROADMAP, Phase 4.)
 `packaging/PKGBUILD` produces the Arch package (`any`, depends on `bash`):
 
 - Ships `bin`, `install`, `skel`, `etc`, `config`, `hardware`, `tools`,
-  `migrations` and `themes` to **`/usr/share/x`**.
+  `migrations`, `themes` and `hooks` to **`/usr/share/x`**.
 - Makes every `*.sh` (and the `x` dispatcher) executable under
-  `/usr/share/x/{bin,install,hardware,tools}`.
+  `/usr/share/x/{bin,install,hardware,tools,hooks}`.
+- The `/etc` overlay (including the pacman hooks `etc/pacman.d/hooks/`) is
+  applied by `x setup` (`install/config.sh`); `hooks/pacman-gen.sh` is the
+  wrapper those hooks call (see `provisioning.md` and `generations.md`).
 - Installs `/usr/bin/x` as a symlink to `/usr/share/x/bin/x`.
 - If `packaging/.vendor/x-config` exists, its contents are merged into
   `/usr/share/x/config` (the offline desktop snapshot used by

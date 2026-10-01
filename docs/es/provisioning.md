@@ -73,8 +73,20 @@ X_HYPRLAND=0 bash install/user.sh
 - `xgen_maybe_new` — hook que usan `x setup` (`install/system.sh`) y
   `x update`; no-op cuando las generaciones no están soportadas o
   `X_GEN_SKIP=1`.
-- `xgen_list`/`xgen_status`/`xgen_restore` — inspeccionan generaciones y
-  restauran archivos/directorios. Contrato completo en `generations.md`.
+- `xgen_list`/`xgen_status`/`xgen_restore`/`xgen_verify` — inspeccionan
+  generaciones, comparan el sistema vivo y restauran archivos/directorios.
+  Contrato completo en `generations.md`.
+
+`install/helpers/xgen-home.sh` — generaciones de home (copias de dotfiles, sin
+root ni btrfs): `hgen_new`, `hgen_list`, `hgen_status`, `hgen_diff`,
+`hgen_restore` y `hgen_prune`, que respaldan los comandos `x home`.
+`user-seed.sh` registra una captura `pre-setup` antes de tocar dotfiles y
+`x update` registra una `pre-update`; `X_HGEN_SKIP=1` desactiva ambas.
+
+Hooks de pacman: `etc/pacman.d/hooks/{10-x-gen-pre,20-x-gen-post}.hook` llaman
+a `hooks/pacman-gen.sh`, que es no-op sin generación actual, en no-btrfs o con
+`X_GEN_SKIP=1` (lo que `x update` setea en su propio pacman para manejar él
+mismo sus generaciones pre/post). Detalles en `generations.md`.
 
 ## Modelo de idempotencia
 
