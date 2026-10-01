@@ -697,7 +697,7 @@ xgen_new() {
     root_subvol="$(xgen_default_subvol "$id")"
     xgen_write_manifest "$id" "$parent" "$reason" "$label" "$pkg_backend" "$root_subvol"
     xgen_snapshot_create "$id" || xgen_die "snapshot failed for generation $id"
-    if [[ "$backend" == "btrfs" && "$root_subvol" == "$(xgen_snapshot_path "$id")" ]]; then
+    if [[ "$backend" == "btrfs" && "$root_subvol" == "$(xgen_subvol_prefix)/$id" ]]; then
         xgen_patch_snapshot_fstab "$id" || xgen_warn "could not patch the snapshot fstab"
     fi
     if [[ -z "$oldcur" ]]; then
@@ -1285,16 +1285,19 @@ xgen_import() {
             [[ "$(id -u)" -eq 0 ]] || { rm -rf "$tmpdir"; xgen_die "btrfs data import requires root"; }
             mkdir -p "$X_GEN_SNAPSHOTS"
             if btrfs receive "$X_GEN_SNAPSHOTS" < "$tmpdir/snapshot.btrfs" >/dev/null 2>&1; then
-                # btrfs receive preserves the sent name (.export-<id>):
-                # replace any previous subvolume and rename it to the id.
+                # receive() preserves the sent name (.export-<id>) as a
+                # read-only subvolume with received_uuid set; btrfs refuses to
+                # flip those to rw (and forcing it breaks incremental send).
+                # Fork a fresh writable snapshot for the generation and drop
+                # the received one instead.
                 if [[ -e "$X_GEN_SNAPSHOTS/$id" ]]; then
                     btrfs subvolume delete "$X_GEN_SNAPSHOTS/$id" >/dev/null 2>&1 || true
                 fi
                 if [[ -e "$X_GEN_SNAPSHOTS/.export-$id" ]]; then
-                    mv "$X_GEN_SNAPSHOTS/.export-$id" "$X_GEN_SNAPSHOTS/$id" 2>/dev/null || true
-                    # btrfs send/receive preserves the read-only flag of the
-                    # sent subvolume; a generation must stay writable.
-                    btrfs property set "$X_GEN_SNAPSHOTS/$id" ro false >/dev/null 2>&1 || true
+                    if ! btrfs subvolume snapshot "$X_GEN_SNAPSHOTS/.export-$id" "$X_GEN_SNAPSHOTS/$id" >/dev/null 2>&1; then
+                        xgen_warn "could not fork the received snapshot into generation $id"
+                    fi
+                    btrfs subvolume delete "$X_GEN_SNAPSHOTS/.export-$id" >/dev/null 2>&1 || true
                 fi
             else
                 xgen_warn "btrfs receive failed; metadata imported without snapshot data"
