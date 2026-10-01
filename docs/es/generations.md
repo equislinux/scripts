@@ -183,7 +183,7 @@ capturada.
 | `X_GEN_DIR` | `$X_GEN_STATE/generations` | Store de manifiestos |
 | `X_GEN_CURRENT` | `$X_GEN_STATE/current` | Archivo con la generación default |
 | `X_GEN_SNAPSHOTS` | `/.snapshots` | Store de snapshots (punto de montaje) |
-| `X_GEN_SUBVOL_PREFIX` | `$X_GEN_SNAPSHOTS` | Ruta in-fs del store (opción de mount `subvol=`) |
+| `X_GEN_SUBVOL_PREFIX` | auto | Ruta in-fs del store (opción de mount `subvol=`); se deriva del montaje btrfs (`/@snapshots`), override solo para forzar |
 | `X_GEN_ROOT` | `/` | Árbol a snapshotear (los tests usan una raíz falsa) |
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline registrado en el manifiesto |
 | `X_GEN_BOOT` | `auto` | `on`/`off`/`auto` (auto: activo con btrfs) |

@@ -14,7 +14,8 @@
 #   X_GEN_DIR         generations dir     (default $X_GEN_STATE/generations)
 #   X_GEN_CURRENT     default-boot id     (default $X_GEN_STATE/current)
 #   X_GEN_SNAPSHOTS   snapshots dir       (default /.snapshots)
-#   X_GEN_SUBVOL_PREFIX  in-fs path of the snapshots dir (default X_GEN_SNAPSHOTS)
+#   X_GEN_SUBVOL_PREFIX  in-fs path of the snapshots dir (auto-detected from
+#                        the btrfs mount, e.g. /@snapshots; override to force)
 #   X_GEN_ROOT        tree to snapshot    (default /)
 #   X_GEN_BACKEND     auto|btrfs|dir|off  (default auto)
 #   X_GEN_CMDLINE     kernel cmdline      (default /proc/cmdline)
@@ -32,7 +33,7 @@ X_GEN_STATE="${X_GEN_STATE:-/var/lib/x}"
 X_GEN_DIR="${X_GEN_DIR:-$X_GEN_STATE/generations}"
 X_GEN_CURRENT="${X_GEN_CURRENT:-$X_GEN_STATE/current}"
 X_GEN_SNAPSHOTS="${X_GEN_SNAPSHOTS:-/.snapshots}"
-X_GEN_SUBVOL_PREFIX="${X_GEN_SUBVOL_PREFIX:-$X_GEN_SNAPSHOTS}"
+X_GEN_SUBVOL_PREFIX="${X_GEN_SUBVOL_PREFIX:-}"
 X_GEN_ROOT="${X_GEN_ROOT:-/}"
 X_GEN_BACKEND="${X_GEN_BACKEND:-auto}"
 X_GEN_BOOT="${X_GEN_BOOT:-auto}"
@@ -299,6 +300,26 @@ xgen_root_device() {
     findmnt -n -o SOURCE -T "$X_GEN_ROOT" 2>/dev/null | sed 's/\[.*\]$//'
 }
 
+# In-fs path of the snapshot store, used by mount options and boot entries.
+# An explicit X_GEN_SUBVOL_PREFIX wins; otherwise it is derived from the btrfs
+# mount (`/@snapshots` on installer layouts); the dir/off backends fall back to
+# the mount path itself.
+xgen_subvol_prefix() {
+    if [[ -n "${X_GEN_SUBVOL_PREFIX:-}" ]]; then
+        printf '%s\n' "$X_GEN_SUBVOL_PREFIX"
+        return 0
+    fi
+    if [[ "$(xgen_backend)" == "btrfs" ]]; then
+        local fsroot=""
+        fsroot="$(findmnt -n -o FSROOT -T "$X_GEN_SNAPSHOTS" 2>/dev/null)" || fsroot=""
+        if [[ -n "$fsroot" && "$fsroot" != "/" ]]; then
+            printf '%s\n' "$fsroot"
+            return 0
+        fi
+    fi
+    printf '%s\n' "$X_GEN_SNAPSHOTS"
+}
+
 xgen_snapshot_create() {
     local id="$1" backend snap
     backend="$(xgen_backend)"
@@ -342,7 +363,7 @@ xgen_patch_snapshot_fstab() {
     dev="$(xgen_root_device)"
     [[ -n "$dev" ]] || return 1
     subid="$(xgen_snapshot_subvolid "$id")"
-    subpath="$X_GEN_SUBVOL_PREFIX/$id"
+    subpath="$(xgen_subvol_prefix)/$id"
     [[ -n "$subid" ]] || return 1
     mnt="$(mktemp -d)"
     mount -o "subvol=$subpath" "$dev" "$mnt" || { rmdir "$mnt" 2>/dev/null || true; return 1; }
@@ -386,7 +407,7 @@ xgen_default_subvol() {
         return 0
     fi
     case "$(xgen_backend)" in
-        btrfs) printf '%s/%s\n' "$X_GEN_SUBVOL_PREFIX" "$id" ;;
+        btrfs) printf '%s/%s\n' "$(xgen_subvol_prefix)" "$id" ;;
         *)     printf '/fake/%s\n' "$id" ;;
     esac
 }
@@ -1271,6 +1292,9 @@ xgen_import() {
                 fi
                 if [[ -e "$X_GEN_SNAPSHOTS/.export-$id" ]]; then
                     mv "$X_GEN_SNAPSHOTS/.export-$id" "$X_GEN_SNAPSHOTS/$id" 2>/dev/null || true
+                    # btrfs send/receive preserves the read-only flag of the
+                    # sent subvolume; a generation must stay writable.
+                    btrfs property set "$X_GEN_SNAPSHOTS/$id" ro false >/dev/null 2>&1 || true
                 fi
             else
                 xgen_warn "btrfs receive failed; metadata imported without snapshot data"
@@ -1384,7 +1408,7 @@ xgen_snapshot_mount() {
     dev="$(xgen_root_device)"
     [[ -n "$dev" ]] || xgen_die "cannot resolve the device of $X_GEN_ROOT"
     mnt="$(mktemp -d)"
-    mount -o "ro,subvol=$X_GEN_SUBVOL_PREFIX/$id" "$dev" "$mnt" || {
+    mount -o "ro,subvol=$(xgen_subvol_prefix)/$id" "$dev" "$mnt" || {
         rmdir "$mnt" 2>/dev/null || true
         xgen_die "cannot mount snapshot $id"
     }

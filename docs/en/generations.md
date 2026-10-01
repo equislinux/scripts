@@ -182,7 +182,7 @@ outside `x update`" gap: any manual pacman transaction is captured.
 | `X_GEN_DIR` | `$X_GEN_STATE/generations` | Manifest store |
 | `X_GEN_CURRENT` | `$X_GEN_STATE/current` | Default-boot id file |
 | `X_GEN_SNAPSHOTS` | `/.snapshots` | Snapshot store (mount point) |
-| `X_GEN_SUBVOL_PREFIX` | `$X_GEN_SNAPSHOTS` | In-fs path of the snapshot store (mount option `subvol=`) |
+| `X_GEN_SUBVOL_PREFIX` | auto | In-fs path of the snapshot store (mount option `subvol=`); derived from the btrfs mount (`/@snapshots`), override only to force |
 | `X_GEN_ROOT` | `/` | Tree to snapshot (tests use a fake root) |
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline recorded in the manifest |
 | `X_GEN_BOOT` | `auto` | `on`/`off`/`auto` (auto: enabled with btrfs) |
