@@ -7,6 +7,10 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "== headless suite (smoke: dispatch, helpers, generations) =="
 bash "$SRC/test/smoke.sh"
 
+echo
+echo "== package payload =="
+bash "$SRC/test/package-payload.sh"
+
 for repo in xpm xpkg; do
     dir="$SRC/../$repo"
     if [[ -d "$dir" && -f "$dir/Cargo.toml" ]] && command -v cargo >/dev/null 2>&1; then
