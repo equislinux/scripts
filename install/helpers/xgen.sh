@@ -147,7 +147,9 @@ xgen_hash_tree() {
     (
         cd "$dir" || exit 1
         find . -xdev -type f \
-            ! -name '.pwd.lock' ! -name 'mtab' ! -path './pacman.d/gnupg/*' \
+            ! -name '.pwd.lock' ! -name 'mtab' ! -name '.updated' \
+            ! -name 'resolv.conf' ! -name 'adjtime' \
+            ! -path './pacman.d/gnupg/*' \
             -print0 2>/dev/null \
             | LC_ALL=C sort -z \
             | xargs -0 -r sha256sum \
@@ -237,6 +239,15 @@ xgen_capture_kernel() {
         found=1
     done
     [[ "$found" -eq 1 ]]
+}
+
+# Rewrites the /etc hash in a manifest (used to re-anchor it to the snapshot).
+xgen_manifest_set_hash() {
+    local id="$1" hash="$2" f tmp
+    f="$(xgen_manifest_path "$id")"
+    [[ -f "$f" && -n "$hash" ]] || return 0
+    tmp="$f.tmp"
+    sed "s|\"etc_sha256\": \"[^\"]*\"|\"etc_sha256\": \"$hash\"|" "$f" > "$tmp" && mv "$tmp" "$f"
 }
 
 xgen_manifest_field() {
@@ -700,6 +711,14 @@ xgen_new() {
     if [[ "$backend" == "btrfs" && "$root_subvol" == "$(xgen_subvol_prefix)/$id" ]]; then
         xgen_patch_snapshot_fstab "$id" || xgen_warn "could not patch the snapshot fstab"
     fi
+    # The /etc hash must describe the snapshot (immutable), not the live tree:
+    # hashing before the snapshot raced with boot-time writers (resolv.conf,
+    # ssh host keys, ...) and the manifest never matched again.
+    local snap_etc
+    snap_etc="$(xgen_snapshot_path "$id")/etc"
+    if [[ -d "$snap_etc" ]]; then
+        xgen_manifest_set_hash "$id" "$(xgen_hash_tree "$snap_etc" 2>/dev/null || true)"
+    fi
     if [[ -z "$oldcur" ]]; then
         xgen_current_set "$id"
     fi
@@ -1154,6 +1173,9 @@ xgen_status() {
         [[ -e "$d" ]] || continue
         n_entries=$((n_entries + 1))
     done
+    if [[ -f "$X_GEN_BOOT_DIR/grub/custom.cfg" ]]; then
+        n_entries=$((n_entries + $(grep -c -- '--id x-gen-' "$X_GEN_BOOT_DIR/grub/custom.cfg" 2>/dev/null || true)))
+    fi
     printf 'snapshots:  %s in %s\n' "$n_snaps" "$X_GEN_SNAPSHOTS"
     printf 'entries:    %s in %s\n' "$n_entries" "$X_GEN_BOOT_DIR"
     if [[ "$backend" == "btrfs" ]] && command -v btrfs >/dev/null 2>&1; then
@@ -1345,6 +1367,9 @@ xgen_status_json() {
         [[ -e "$d" ]] || continue
         n_entries=$((n_entries + 1))
     done
+    if [[ -f "$X_GEN_BOOT_DIR/grub/custom.cfg" ]]; then
+        n_entries=$((n_entries + $(grep -c -- '--id x-gen-' "$X_GEN_BOOT_DIR/grub/custom.cfg" 2>/dev/null || true)))
+    fi
     printf '{"schema":1,"backend":"%s","running":"%s","default":"%s","pending":%s,"created":"%s","reason":"%s","label":"%s","snapshot":"%s","snapshots":%s,"entries":%s,"drift":%s}\n' \
         "$backend" \
         "$(xgen_json_str "$running")" \
