@@ -73,7 +73,13 @@ sudo x gen prune --keep 5 --dry-run
 
 El restore nunca pisa en silencio: un archivo que difiere se mueve a
 `<archivo>.bak.<ts>` antes de copiar la versión del snapshot (mismo contrato
-que `x_sync_config` en `install/helpers/sync.sh`).
+que `x_sync_config` en `install/helpers/sync.sh`). Las rutas se validan: se
+rechazan componentes `..` y las listas de archivos de paquete con rutas
+inseguras se saltean con un warning.
+
+`/var/lib/x` y `/.snapshots` son `0700 root`: los comandos de lectura
+(`list`, `status`, `diff`, ...) imprimen un error claro de "re-ejecutá con
+sudo" en vez de una lista vacía cuando se corren sin privilegios.
 
 `x gen diff` compara `packages.tsv` (versiones agregadas/eliminadas/
 actualizadas), `services.txt`, `migrations.txt`, el kernel y el hash de `/etc`.
@@ -124,8 +130,11 @@ posible si estaba unpinned), limpia el marcador.
 `x gen export <id>` empaqueta los metadatos de la generación (manifiesto,
 capturas, migraciones, kernel archivado) como `tar.zst` (o `tar.gz` sin zstd).
 `--with-data` agrega el snapshot: `btrfs send` en btrfs (root) o copia del
-árbol con backend `dir`. `x gen import <file>` restaura el bundle en
-`$X_GEN_STATE`; la generación importada no se selecciona automáticamente — usá
+árbol con backend `dir`. Los bundles llevan `BUNDLE.sha256` (hash de cada
+archivo) y `x gen import` lo verifica, abortando si no coincide; los bundles
+sin manifiesto (formato viejo) importan con un warning. Al restaurar un stream
+`btrfs send` se bifurca el subvolumen recibido para que la generación quede
+escribible. La generación importada no se selecciona automáticamente — usá
 `x gen rollback <id>` después. Los duplicados fallan salvo `--force`.
 
 Es la vía de portabilidad: mover una generación entre máquinas o respaldarla

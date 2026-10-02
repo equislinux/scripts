@@ -123,16 +123,29 @@ if ( xgen_restore 9999 /etc/app.conf "$TMP/x" ) >/dev/null 2>&1; then
 else
     check "restore of an unknown generation fails" true
 fi
+if ( xgen_restore 0001 '/../etc/passwd' "$TMP/evil" ) >/dev/null 2>&1; then
+    check "restore rejects traversal paths" false
+else
+    check "restore rejects traversal paths" true
+fi
+if ( xgen_restore 0001 '/etc/../../evil' "$TMP/evil" ) >/dev/null 2>&1; then
+    check "restore rejects embedded .. components" false
+else
+    check "restore rejects embedded .. components" true
+fi
+check "no escaped file was created" test ! -e "$TMP/evil"
 
 echo "== restore --pkg =="
 mkdir -p "$X_GEN_SNAPSHOTS/0001/var/lib/pacman/local/foo-2.0-1" \
          "$X_GEN_SNAPSHOTS/0001/usr/share/foo" \
          "$X_GEN_ROOT/usr/share/foo"
-printf '%%FILES%%\nusr/share/foo/\nusr/share/foo/app.conf\n' \
+printf '%%FILES%%\n../../evil\nusr/share/foo/\nusr/share/foo/app.conf\n' \
     > "$X_GEN_SNAPSHOTS/0001/var/lib/pacman/local/foo-2.0-1/files"
 printf 'pkg-snapshot\n' > "$X_GEN_SNAPSHOTS/0001/usr/share/foo/app.conf"
 printf 'pkg-live\n' > "$X_GEN_ROOT/usr/share/foo/app.conf"
-xgen_restore_pkg foo 0001 "$X_GEN_ROOT"
+PKG_OUT="$(xgen_restore_pkg foo 0001 "$X_GEN_ROOT" 2>&1)"
+check "package restore warns about unsafe paths" grep -q 'unsafe path' <<< "$PKG_OUT"
+check "package restore does not create escaped files" test ! -e "$TMP/evil"
 check "package restore brings the snapshot file back" \
     test "$(cat "$X_GEN_ROOT/usr/share/foo/app.conf")" = "pkg-snapshot"
 check "package restore keeps a backup" \
@@ -151,6 +164,17 @@ check "x gen new records the next id" test -d "$X_GEN_DIR/0003"
 
 UNSUP="$(X_GEN_BACKEND=off bash "$SRC/bin/x" gen list)"
 check "off backend reports unsupported" grep -q 'not supported' <<< "$UNSUP"
+
+if [[ "$(id -u)" -ne 0 ]]; then
+    mkdir -p "$TMP/noperm/generations"
+    chmod 000 "$TMP/noperm/generations" 2>/dev/null || true
+    if OUT="$(X_GEN_DIR="$TMP/noperm/generations" xgen_list 2>&1)"; then
+        check "read commands fail clearly on a root-only state" false
+    else
+        check "read commands fail clearly on a root-only state" grep -q 'root-only' <<< "$OUT"
+    fi
+    chmod 755 "$TMP/noperm/generations" 2>/dev/null || true
+fi
 
 echo "== prune by age =="
 sed -i 's/"created": ".*"/"created": "2000-01-01T00:00:00Z"/' "$X_GEN_DIR/0002/manifest.json"

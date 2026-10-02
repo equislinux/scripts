@@ -48,6 +48,7 @@ xgen_export 0001 "$TMP/meta.tar.gz" 0 >/dev/null
 check "metadata bundle written" test -f "$TMP/meta.tar.gz"
 check "bundle carries the manifest" bash -c "tar -tzf '$TMP/meta.tar.gz' | grep -q './manifest.json'"
 check "metadata bundle has no snapshot data" bash -c "! tar -tzf '$TMP/meta.tar.gz' | grep -q './snapshot'"
+check "bundle carries the checksum manifest" bash -c "tar -tzf '$TMP/meta.tar.gz' | grep -q './BUNDLE.sha256'"
 xgen_export 0001 "$TMP/full.tar.gz" 1 >/dev/null
 check "full bundle carries the snapshot" bash -c "tar -tzf '$TMP/full.tar.gz' | grep -q './snapshot/'"
 
@@ -87,6 +88,22 @@ env X_GEN_BACKEND=dir X_GEN_BOOT=off X_GEN_CMDLINE="$X_GEN_CMDLINE" \
     X_GEN_CURRENT="$C/state/current" X_GEN_SNAPSHOTS="$C/snapshots" \
     bash "$SRC/bin/x-gen-import.sh" "$TMP/full.tar.gz" --force >/dev/null
 check "duplicate import with --force replaces" test -f "$C/snapshots/0001/etc/app.conf"
+
+echo "== integrity =="
+D="$TMP/d"
+mkdir -p "$TMP/tamper"
+tar -xzf "$TMP/meta.tar.gz" -C "$TMP/tamper"
+printf 'tampered\n' >> "$TMP/tamper/manifest.json"
+tar -czf "$TMP/tampered.tar.gz" -C "$TMP/tamper" .
+if OUT="$(env X_GEN_BACKEND=dir X_GEN_BOOT=off \
+    X_GEN_ROOT="$D/root" X_GEN_STATE="$D/state" X_GEN_DIR="$D/state/generations" \
+    X_GEN_CURRENT="$D/state/current" X_GEN_SNAPSHOTS="$D/snapshots" \
+    bash "$SRC/bin/x-gen-import.sh" "$TMP/tampered.tar.gz" 2>&1)"; then
+    check "tampered bundle is rejected" false
+else
+    check "tampered bundle is rejected" true
+fi
+check "rejection mentions the checksum" grep -q 'checksum' <<< "$OUT"
 
 if [[ "$FAIL" -eq 0 ]]; then
     echo "generations-export: OK"

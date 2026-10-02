@@ -53,6 +53,26 @@ xgen_die() {
     exit 1
 }
 
+# The state dir is root-only (0700) on installed systems: give a clear message
+# instead of returning an empty list when a read command is run as a user.
+xgen_check_state_readable() {
+    [[ -d "$X_GEN_DIR" ]] || return 0
+    [[ -r "$X_GEN_DIR" ]] && return 0
+    [[ "$(id -u)" -eq 0 ]] && return 0
+    xgen_die "generation state is root-only ($X_GEN_DIR); re-run with sudo"
+}
+
+# True when the relative path stays inside the snapshot (no `..` components).
+xgen_is_safe_relpath() {
+    local p="${1#/}"
+    case "$p" in
+        ''|..|../*|*/../*|*/..) return 1 ;;
+    esac
+    return 0
+}
+
+
+
 # --- backend ----------------------------------------------------------------
 
 xgen_backend() {
@@ -751,6 +771,7 @@ xgen_rollback() {
         xgen_die "rollback requires root"
     fi
     [[ -f "$(xgen_manifest_path "$target")" ]] || xgen_die "generation $target not found"
+    xgen_check_state_readable
 
     if [[ "$no_safety" != "1" && "$no_safety" != "--no-safety" ]]; then
         xgen_new "pre-rollback" "safety" >/dev/null || xgen_die "safety generation failed"
@@ -776,6 +797,7 @@ xgen_diff() {
     [[ -n "$a" && -n "$b" ]] || xgen_die "usage: x gen diff <id-a> <id-b>"
     [[ -f "$(xgen_manifest_path "$a")" ]] || xgen_die "generation $a not found"
     [[ -f "$(xgen_manifest_path "$b")" ]] || xgen_die "generation $b not found"
+    xgen_check_state_readable
 
     printf 'generation %s -> %s\n\n' "$a" "$b"
 
@@ -865,6 +887,7 @@ xgen_verify() {
     local id="${1:-$(xgen_current)}" drift=0
     [[ -n "$id" ]] || xgen_die "no generation to verify; pass an id"
     [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+    xgen_check_state_readable
 
     printf 'verifying live system against generation %s\n\n' "$id"
 
@@ -988,6 +1011,7 @@ xgen_pin() {
     local id="$1" unpin="${2:-0}"
     [[ -n "$id" ]] || xgen_die "usage: x gen pin <id> [--unpin]"
     [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+    xgen_check_state_readable
     if [[ "$unpin" == "1" || "$unpin" == "--unpin" ]]; then
         rm -f "$(xgen_gen_dir "$id")/pinned"
         xgen_log "generation $id unpinned"
@@ -1027,6 +1051,7 @@ xgen_prune() {
     local keep_n="${1:-${X_GEN_KEEP:-5}}" dry="${2:-0}" older_days="${3:-0}"
     [[ "$keep_n" =~ ^[0-9]+$ ]] || xgen_die "keep must be a number"
     [[ "$older_days" =~ ^[0-9]+$ ]] || xgen_die "older-than must be a number of days"
+    xgen_check_state_readable
     local backend running cur id
     local cutoff=""
     if (( older_days > 0 )); then
@@ -1108,6 +1133,7 @@ xgen_prune() {
 }
 
 xgen_list() {
+    xgen_check_state_readable
     local dir id label reason created cur running markers found=0
     cur="$(xgen_current)"
     running="$(xgen_running_id)"
@@ -1138,6 +1164,7 @@ xgen_list() {
 }
 
 xgen_status() {
+    xgen_check_state_readable
     local backend cur running pending dir then_hash now_hash
     backend="$(xgen_backend)"
     printf 'backend:    %s\n' "$backend"
@@ -1201,6 +1228,7 @@ xgen_export() {
     local id="$1" out="${2:-}" with_data="${3:-0}"
     [[ -n "$id" ]] || xgen_die "usage: x gen export <id> [--out FILE] [--with-data]"
     [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+    xgen_check_state_readable
 
     local tmpdir
     tmpdir="$(mktemp -d)"
@@ -1238,6 +1266,12 @@ xgen_export() {
         esac
     fi
 
+    # Integrity manifest: sha256 of every bundled file (verified on import).
+    local sums
+    sums="$(mktemp)"
+    (cd "$tmpdir" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum) > "$sums"
+    mv "$sums" "$tmpdir/BUNDLE.sha256"
+
     if [[ -z "$out" ]]; then
         local stamp
         stamp="$(date -u +%Y%m%d)"
@@ -1262,6 +1296,7 @@ xgen_export() {
 xgen_import() {
     local file="$1" force="${2:-0}"
     [[ -f "$file" ]] || xgen_die "bundle not found: $file"
+    xgen_check_state_readable
 
     local tmpdir
     tmpdir="$(mktemp -d)"
@@ -1281,6 +1316,15 @@ xgen_import() {
             xgen_die "unknown bundle format: $file (expected .tar.zst, .tar.gz or .tar)"
             ;;
     esac
+
+    if [[ -f "$tmpdir/BUNDLE.sha256" ]]; then
+        if ! (cd "$tmpdir" && sha256sum -c --quiet BUNDLE.sha256 >/dev/null 2>&1); then
+            rm -rf "$tmpdir"
+            xgen_die "bundle checksum verification failed (corrupt or tampered): $file"
+        fi
+    else
+        xgen_warn "bundle has no BUNDLE.sha256; skipping the integrity check"
+    fi
 
     local id
     id="$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "$tmpdir/manifest.json" 2>/dev/null | head -1)"
@@ -1444,25 +1488,31 @@ xgen_snapshot_mount() {
 }
 
 xgen_restore() {
-    local id="$1" path="$2" dest="${3:-}"
+    local id="$1" path="$2" dest="${3:-}" rel
     [[ -n "$id" && -n "$path" ]] || xgen_die "usage: x gen restore <path> [--from ID]"
-    [[ -n "$dest" ]] || dest="/${path#/}"
+    xgen_check_state_readable
+    if ! xgen_is_safe_relpath "$path"; then
+        xgen_die "path escapes the snapshot: $path"
+    fi
+    rel="${path#/}"
+    [[ -n "$rel" ]] || xgen_die "invalid empty path"
+    [[ -n "$dest" ]] || dest="/$rel"
 
     local snap mnt="" root src
     snap="$(xgen_snapshot_path "$id")"
     [[ -d "$snap" ]] || xgen_die "generation $id not found ($snap)"
     mnt="$(xgen_snapshot_mount "$id")"
     root="${mnt:-$snap}"
-    src="$root/${path#/}"
+    src="$root/$rel"
 
     if [[ ! -e "$src" ]]; then
         xgen_release_mount "$mnt"
-        xgen_die "$path not found in generation $id"
+        xgen_die "$rel not found in generation $id"
     fi
 
     xgen_restore_from "$src" "$dest"
     xgen_release_mount "$mnt"
-    xgen_log "restored $path from generation $id -> $dest"
+    xgen_log "restored $rel from generation $id -> $dest"
 }
 
 # Restores every file of a package using the file list of the package database
@@ -1471,6 +1521,7 @@ xgen_restore_pkg() {
     local pkg="$1" id="$2" dest="${3:-}"
     [[ -n "$pkg" && -n "$id" ]] || xgen_die "usage: x gen restore --pkg <name> [--from ID]"
     [[ "$pkg" != */* ]] || xgen_die "invalid package name: $pkg"
+    xgen_check_state_readable
 
     local snap mnt="" root dbdir files count=0 rel src target prefix
     snap="$(xgen_snapshot_path "$id")"
@@ -1497,6 +1548,10 @@ xgen_restore_pkg() {
         [[ "$rel" == %* ]] && continue
         [[ -n "$rel" ]] || continue
         rel="${rel#/}"
+        if ! xgen_is_safe_relpath "$rel"; then
+            xgen_warn "skipping unsafe path in the package file list: $rel"
+            continue
+        fi
         src="$root/$rel"
         target="$prefix/$rel"
         if [[ ! -e "$src" ]]; then
