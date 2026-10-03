@@ -1,12 +1,19 @@
 # Maintainer: Xscriptor <dev@xscriptor.com>
 pkgname=x-scripts
 pkgver=0.1.0
-pkgrel=22
+pkgrel=23
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
 url="https://github.com/xlnux/scripts"
 license=('MIT')
-depends=('bash')
+# base covers bash/coreutils/util-linux/pacman, listed explicitly for clarity:
+# the engine shells out to all of them, plus btrfs-progs for the generations.
+depends=('bash' 'btrfs-progs' 'coreutils' 'util-linux' 'pacman')
+optdepends=(
+    'gnupg: signed generation export/import (--sign)'
+    'zstd: zstd-compressed export bundles (falls back to gzip)'
+    'git: fetch desktop/theming sources (x theme, x setup)'
+)
 source=()
 md5sums=()
 
@@ -29,6 +36,8 @@ package() {
     fi
 
     find "$dest/bin" "$dest/install" "$dest/hardware" "$dest/tools" "$dest/hooks" -type f \( -name '*.sh' -o -name 'x' \) -exec chmod +x {} +
+
+    install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 
     ln -s /usr/share/x/bin/x "$pkgdir/usr/bin/x"
 }

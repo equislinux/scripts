@@ -24,10 +24,10 @@ if [[ "$(id -u)" -eq 0 ]]; then
     echo
     echo "== btrfs suite (real loop device) =="
     bash "$SRC/test/generations-btrfs.sh"
-elif sudo -n true 2>/dev/null; then
+elif sudo -n -l /usr/bin/bash "$SRC/test/generations-btrfs.sh" >/dev/null 2>&1; then
     echo
-    echo "== btrfs suite (real loop device, via sudo) =="
-    sudo -n bash "$SRC/test/generations-btrfs.sh"
+    echo "== btrfs suite (real loop device, via NOPASSWD sudo) =="
+    sudo -n /usr/bin/bash "$SRC/test/generations-btrfs.sh"
 else
     echo
     echo "generations-btrfs: skipped (run: sudo bash $SRC/test/generations-btrfs.sh)"
