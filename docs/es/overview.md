@@ -25,8 +25,12 @@ de packaging y el ROADMAP del workspace).
 ## Qué aporta este repo
 
 - `install/` — orquestadores de fase para aprovisionamiento de sistema (root) y
-  usuario, con helpers de sync idempotentes.
-- `bin/` — la CLI `x` (dispatcher + subcomandos por convención de nombres).
+  usuario, con helpers de sync idempotentes y los motores de generaciones
+  (`xgen.sh` para snapshots del sistema, `xgen-home.sh` para dotfiles).
+- `bin/` — la CLI `x` (dispatcher + subcomandos por convención de nombres),
+  incluidos `x gen ...` y `x home ...`.
+- `hooks/` — wrappers de hooks de pacman (`pacman-gen.sh`) referenciados por
+  los drop-ins de `etc/pacman.d/hooks/`.
 - `skel/`, `etc/`, `config/` — semillas de dotfiles para `/etc/skel`, drop-ins
   de `/etc` y configs de usuario.
 - `hardware/`, `tools/` — módulos opcionales (NVIDIA, QEMU/libvirt, node) y el
@@ -48,9 +52,12 @@ es lo que convierte un Arch recién pacstrapeado en una máquina x aprovisionada
 2. La fase de usuario siembra el home, sincroniza los dotfiles y aprovisiona el
    escritorio (stack Hyprland) **offline** desde un snapshot de config
    vendido.
-3. `x` es la CLI del día a día para temas, migraciones y actualizaciones.
+3. `x` es la CLI del día a día para temas, migraciones y actualizaciones, más
+   **generaciones**: `x gen` versiona el sistema (snapshots booteables,
+   rollback, restore granular) y `x home` versiona los dotfiles del usuario.
 
-Ver `cli.md`, `provisioning.md`, `hyprland.md` y `packaging.md`.
+Ver `cli.md`, `provisioning.md`, `generations.md`, `hyprland.md` y
+`packaging.md`.
 
 ## Fuentes de configuración
 

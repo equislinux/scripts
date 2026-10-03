@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Recording the x generation after the transaction...
+When = PostTransaction
+Exec = /usr/share/x/hooks/pacman-gen.sh post

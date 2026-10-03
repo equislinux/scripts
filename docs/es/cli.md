@@ -35,6 +35,23 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x update` | `pacman -Syu` (privilegiado) seguido de las migraciones del usuario. |
 | `x hardware` | Ejecuta la fase de hardware (detección + módulos). Requiere root. |
 | `x info` | Muestra versión, repo, usuario e info del entorno. |
+| `x gen` / `x gen list` | Lista las generaciones del sistema (`*` marca la actual). Ver `generations.md`. |
+| `x gen new` | Crea una generación: snapshot btrfs + manifiesto (`--reason`, `--label`). |
+| `x gen status` | Muestra running vs default, rollback pendiente y el drift de `/etc`. |
+| `x gen rollback <id>` | Cambia el default boot a una generación (aplica al reiniciar; `--no-safety`). |
+| `x gen boot` | Regenera las entries de boot por generación. |
+| `x gen diff` | Muestra diferencias de paquetes/servicios/migraciones/kernel/`/etc` entre dos generaciones. |
+| `x gen verify` | Compara el sistema vivo contra una generación (exit 1 con drift). |
+| `x gen pin <id>` | Protege una generación del podado (`--unpin`). |
+| `x gen prune` | Elimina generaciones viejas conservando pinned/running/default (`--keep N`, `--older-than DAYS`, `--dry-run`). |
+| `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
+| `x gen restore --pkg <name>` | Restaura todos los archivos de un paquete. |
+| `x gen export` / `x gen import` | Empaqueta/restaura un bundle de generación (`--with-data`, `--force`). |
+| `x gen quota init` / `status` | Habilita quotas btrfs y muestra uso / tabla de qgroups. |
+| `x gen plan` | Imprime las acciones para cumplir una declaración `system.toml`. |
+| `x gen apply` | Aplica una declaración `system.toml` (`--dry-run`); registra una generación. |
+| `x home` / `x home list` | Lista las generaciones de home del usuario (dotfiles). |
+| `x home new` / `status` / `diff` / `restore` / `prune` | Ciclo de vida de las generaciones de home. Ver `generations.md`. |
 
 Los comandos solo-root lo hacen cumplir dentro del dispatcher (ver metadatos
 más abajo) e imprimen un error si se ejecutan como usuario no root.
@@ -51,6 +68,7 @@ Los aliases se definen con el metadato `x:aliases` y permiten que un token
 | `info`, `status`, `doctor` | `x-info.sh` |
 | `migrate`, `migrations` | `x-migrate.sh` |
 | `update`, `upgrade`, `up` | `x-update.sh` |
+| `gen`, `generation`, `generations` | `x-gen-list.sh` (así `x gen` lista las generaciones) |
 
 ## Mecánica del despacho
 
@@ -114,6 +132,20 @@ No hay registro central ni paso de registro.
 | `X_HW_AUTO` | `1` | `0` desactiva la autodetección de hardware en la fase de hardware. |
 | `X_HW_NVIDIA` | `0` | `1` fuerza el módulo NVIDIA. |
 | `X_HW_QEMU` | `0` | `1` habilita el módulo QEMU/libvirt. |
+| `X_GEN_BACKEND` | `auto` | `auto`, `btrfs`, `dir` (tests/degradado) u `off`. Ver `generations.md`. |
+| `X_GEN_STATE` / `X_GEN_DIR` / `X_GEN_CURRENT` | `/var/lib/x/...` | Estado, manifiestos e id actual de las generaciones. |
+| `X_GEN_SNAPSHOTS` | `/.snapshots` | Store de snapshots (punto de montaje). |
+| `X_GEN_SUBVOL_PREFIX` | `$X_GEN_SNAPSHOTS` | Ruta in-fs usada por mount/opciones de boot. |
+| `X_GEN_ROOT` | `/` | Árbol capturado por una generación (los tests usan una raíz falsa). |
+| `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline del kernel registrado en el manifiesto. |
+| `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `3` | Gestión y retención de entries de boot. |
+| `X_GEN_KEEP` | `5` | Retención de generaciones para `x gen prune`. |
+| `X_HGEN_STATE` / `X_HGEN_HOME` | `~/.local/share/x/home-gens` / `$HOME` | Store y home capturado de las generaciones de home. |
+| `X_HGEN_INCLUDE` / `X_HGEN_EXCLUDE` | dotfiles + `.config` / `Cache CachedData GPUCache logs` | Rutas capturadas por `x home new`. |
+| `X_HGEN_KEEP` | `10` | Retención de generaciones de home para `x home prune`. |
+| `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (el instalador usa `/@`). |
+| `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests). |
+| `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks de setup/update. |
 
 Las variables específicas del setup de Hyprland (`X_HYPR_*`) se documentan en
 `hyprland.md`.
@@ -123,6 +155,9 @@ Las variables específicas del setup de Hyprland (`X_HYPR_*`) se documentan en
 - `~/.local/state/x/` — estado de usuario: `theme` (tema activo) y
   `migrations/<name>` (marcadores de migración aplicada).
 - `~/.config/x/` — config de usuario generada, p.ej. `theme.conf`.
+- `/var/lib/x/` — estado de sistema: `generations/<id>/` (manifiestos y
+  capturas) y `current` (id de la generación actual); los snapshots viven en
+  `/.snapshots/`.
 
 Los overrides de entorno anteriores permiten que los tests y el desarrollo
 redirijan cada ruta de estado/salida fuera del home real (ver `test/smoke.sh`).

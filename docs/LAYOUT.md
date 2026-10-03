@@ -9,7 +9,7 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
 |------|------|
 | `bin/` | `x` CLI (dispatcher + `x-*.sh` subcommands by convention). See `docs/CLI.md`. |
 | `install/` | Provisioning orchestrators per phase. |
-| `install/helpers/` | Bash libraries: `common.sh` (log/privileges/root) and `sync.sh` (idempotent tree sync). |
+| `install/helpers/` | Bash libraries: `common.sh` (log/privileges/root), `sync.sh` (idempotent tree sync), `xgen.sh` (system generations: btrfs snapshot + manifest) and `xgen-home.sh` (home generations: dotfile copies). |
 | `install/system.sh` | Root entry: chains `config.sh` → `hardware.sh` → `login.sh` → `post-install.sh`. |
 | `install/config.sh` | Root: seeds `/etc/skel` from `skel/` and applies the `/etc` overlay from `etc/`. |
 | `install/hardware.sh` | Root: detects/runs the modules under `hardware/`. |
@@ -23,6 +23,7 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
 | `config/` | User dotfiles synced to `~/.config` (with backup). `hypr/` is only a documentation entry point + default wallpaper; the desktop config ships offline in the package (`/usr/share/x/config/equisdots`, equisdots org) via `tools/hyprland-install.sh` (ADR-0005). |
 | `migrations/` | Per-user idempotent migrations (`<timestamp>-<name>.sh`), applied by `x migrate`. |
 | `themes/` | Theme store: `themes/<name>/colors` (key=hex), applied by `x theme set`. |
+| `hooks/` | Pacman hook wrappers (installed to `/usr/share/x/hooks`; the `.hook` files live in `etc/pacman.d/hooks/`). |
 | `hardware/` | Self-contained modules: `nvidia.sh`, `qemu.sh`. |
 | `tools/` | Optional per-user toolchains/installers: `node.sh` (fnm), `hyprland-install.sh` (equisdots desktop from the offline snapshot; online fallback via `equisdots/dots`). |
 | `test/` | Local tests without root. |
@@ -34,6 +35,10 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
   missing) → `x_sync_config` with `.bak.<ts>` backup.
 - All scripts are idempotent; files modified by the user are not overwritten
   without leaving a backup.
+- Generations (`x gen`): `x setup` and `x update` record bootable snapshots
+  with a manifest; `x gen rollback` switches the default boot and
+  `x gen restore` recovers paths. See `docs/en/generations.md` (or
+  `docs/es/generations.md`).
 
 ## Usage
 

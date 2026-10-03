@@ -1,53 +1,45 @@
-# x — CLI
+# x — CLI (overview)
 
-`x` is the system provisioning CLI (see the CLI concept in the conversation;
-ADR-0003). It lives in `bin/` of this repo and will be installed as
-`/usr/bin/x` when the payload is packaged.
+`x` is the provisioning CLI of the x system (ADR-0003). Its implementation
+lives in `bin/` and it is installed as `/usr/bin/x` (symlink to
+`/usr/share/x/bin/x`) by the `x-scripts` package.
 
-## Commands
+Full reference: **[docs/en/cli.md](en/cli.md)** (English) and
+**[docs/es/cli.md](es/cli.md)** (Spanish) — dispatcher metadata contract, every
+command argument and all environment variables.
 
-| Command | Description |
-|---------|-------------|
-| `x setup` | Provisions the system (root): config/hardware/login/post-install phases. |
-| `x setup --user` | Provisioning of the current user (dotfiles + options). |
-| `x theme list` | Lists available themes. |
-| `x theme set <name>` | Applies a theme (palette) to the user. |
-| `x migrate` | Runs the user's pending migrations. |
-| `x update` | `pacman -Syu` + migrations. |
-| `x hardware` | Hardware phase (detection + modules). |
-| `x info` | System/environment info. |
-| `x help` | Help. |
+## Command groups
+
+| Group | Commands |
+|-------|----------|
+| Provisioning | `x setup [--user] [--online]`, `x hardware`, `x migrate`, `x update`, `x theme list/set`, `x info` |
+| System generations | `x gen new`, `list`, `status [--json]`, `boot`, `rollback`, `diff`, `verify`, `pin`, `prune`, `restore`, `export`, `import` |
+| Home generations | `x home new`, `list`, `status [--json]`, `diff`, `restore`, `prune` |
+| Help | `x help` |
+
+System generations are documented in **[generations.md](en/generations.md)**
+(English) and **[generations.md](es/generations.md)** (Spanish): snapshots,
+boot entries, rollback, granular restore, pacman hooks, home generations,
+export/import.
 
 ## Adding a command
 
-Create `bin/x-<group>-<verb>.sh` (executable) with metadata in the header:
-
-```bash
-#!/usr/bin/env bash
-# x:summary=one line
-# x:args=[--option]
-# x:aliases=alias1 alias2
-# x:root=true
-set -euo pipefail
-```
-
-- `x:summary` (used in `x help`).
-- `x:aliases` optional (e.g. `theme` → `x-theme-list.sh`).
-- `x:root=true` makes the dispatcher require root.
-
-The dispatcher resolves by file name: `x theme set nord` → looks for
-`x-theme-set.sh` (then `x-theme.sh`, then the `x.sh`-alias) and passes the
-remaining arguments. There is no central registry: adding a command means
-adding a file.
+Create `bin/x-<group>-<verb>.sh` (executable) with metadata in the header
+comments (`x:summary`, optional `x:aliases`/`x:args`, `x:root=true`). There is
+no central registry: adding a command means adding one file. See
+`docs/en/cli.md`.
 
 ## State
 
-`~/.local/state/x/` stores user state (applied migrations, active theme).
-`~/.config/x/` stores generated user config (e.g. `theme.conf`).
+- `~/.local/state/x/` — user state: active theme and migration markers.
+- `~/.local/share/x/home-gens/` — home generations (dotfiles).
+- `~/.config/x/` — generated user config (e.g. `theme.conf`).
+- `/var/lib/x/` — system generation metadata (`@xstate` subvolume on installs).
+- `/.snapshots/` — system generation snapshots.
 
 ## x setup --online
 
-Runs the original equisdots installer (`equisdots/dots setup`) from a
+Runs the upstream equisdots installer (`equisdots/dots setup`) from a
 temporary clone, then cleans up. Use it when already logged in and the offline
 packaged setup is not enough. It asks for the sudo password when the upstream
 script needs it.

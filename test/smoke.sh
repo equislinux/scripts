@@ -152,6 +152,29 @@ check "failed migration is not marked" test ! -f "$X_STATE_DIR/migrations/202609
 
 unset X_MIGRATIONS_DIR
 
+echo "== generations =="
+if ! bash "$SRC/test/generations.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/generations-boot.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/generations-multikernel.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/generations-system.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/pacman-hooks.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/generations-export.sh"; then
+    FAIL=1
+fi
+if ! bash "$SRC/test/home-gens.sh"; then
+    FAIL=1
+fi
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "smoke: OK"
 else
