@@ -101,6 +101,12 @@ posible si estaba unpinned), limpia el marcador.
   porque su raíz muta in-place (las actualizaciones mantienen los módulos en
   sync). Las generaciones **congeladas** bootean su copia archivada
   (`/boot/x/gen-<id>/...`), que coincide con su `/usr/lib/modules` congelado.
+- **Multi-kernel**: una entry por kernel instalado, detectado desde
+  `/usr/lib/modules/<release>/pkgbase` (`linux`, `linux-lts`, ...). El kernel
+  primario (manifiesto `kernel.release`) conserva el id `x-gen-<id>`; el resto
+  usa `x-gen-<id>-<pkgbase>`. Los kernels congelados se archivan por pkgbase en
+  `/boot/x/gen-<id>/<pkgbase>/`. Las generaciones legacy de un solo kernel
+  mantienen el layout viejo y emparejan vmlinuz/initramfs por sufijo.
 - El ESP conserva las últimas `X_GEN_BOOT_KEEP` generaciones más la default, la
   running y las `pinned`; podar el ESP nunca borra el snapshot btrfs ni los
   metadatos, así que cualquier generación se puede volver a seleccionar
@@ -248,6 +254,8 @@ qgroups de btrfs.
 - `test/generations-boot.sh` — entries de boot (systemd-boot + GRUB), kernel
   running vs congelado, retención del ESP, rollback, pin/unpin, prune, estado
   pending.
+- `test/generations-multikernel.sh` — entries por pkgbase para `linux` +
+  `linux-lts`, layout archivado y fallback legacy.
 - `test/pacman-hooks.sh` — guards del wrapper (sin current, `X_GEN_SKIP`),
   reasons y archivos de hook instalados.
 - `test/generations-export.sh` — round-trip export/import (metadata y datos),

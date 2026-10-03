@@ -100,6 +100,12 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
   because its root mutates in place (updates keep modules in sync). **Frozen**
   generations boot their archived kernel copy (`/boot/x/gen-<id>/...`), which
   matches their frozen `/usr/lib/modules`.
+- **Multi-kernel**: one entry per installed kernel, detected from
+  `/usr/lib/modules/<release>/pkgbase` (`linux`, `linux-lts`, ...). The
+  primary kernel (manifest `kernel.release`) keeps the plain `x-gen-<id>`
+  entry id; the rest get `x-gen-<id>-<pkgbase>`. Frozen kernels are archived
+  per pkgbase under `/boot/x/gen-<id>/<pkgbase>/`. Legacy single-kernel
+  generations keep the old layout and pair vmlinuz/initramfs by name suffix.
 - The ESP keeps the last `X_GEN_BOOT_KEEP` generations plus the default,
   running and `pinned` ones; pruning the ESP never deletes the btrfs snapshot
   or the metadata, so any generation can be re-selected later (`rollback`
@@ -244,6 +250,8 @@ SELinux/secure-boot UKIs and the disk-space limit via btrfs qgroups.
   restore (path and `--pkg`).
 - `test/generations-boot.sh` — boot entries (systemd-boot + GRUB), running vs
   frozen kernels, ESP retention, rollback, pin/unpin, prune, pending state.
+- `test/generations-multikernel.sh` — per-pkgbase entries for `linux` +
+  `linux-lts`, archived kernel layout and legacy fallback.
 - `test/pacman-hooks.sh` — wrapper guards (no current, `X_GEN_SKIP`), reasons
   and shipped hook files.
 - `test/generations-export.sh` — export/import round-trip (metadata and data),

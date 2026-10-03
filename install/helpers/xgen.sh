@@ -178,11 +178,16 @@ xgen_hash_tree() {
 }
 
 xgen_kernel_release() {
-    local rel=""
-    if [[ -d "$X_GEN_ROOT/usr/lib/modules" ]]; then
+    local rel="" running
+    running="$(uname -r 2>/dev/null || true)"
+    # Prefer the running kernel when its modules are present (installed
+    # systems); inside a chroot fall back to the newest modules dir.
+    if [[ -n "$running" && -d "$X_GEN_ROOT/usr/lib/modules/$running" ]]; then
+        rel="$running"
+    elif [[ -d "$X_GEN_ROOT/usr/lib/modules" ]]; then
         rel="$(find "$X_GEN_ROOT/usr/lib/modules" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null | LC_ALL=C sort -V | tail -1)"
     fi
-    [[ -n "$rel" ]] || rel="$(uname -r 2>/dev/null || printf 'unknown')"
+    [[ -n "$rel" ]] || rel="${running:-unknown}"
     printf '%s\n' "$rel"
 }
 
@@ -258,7 +263,70 @@ xgen_capture_kernel() {
         cp -a "$f" "$dest/" 2>/dev/null || return 1
         found=1
     done
+
+    # Per-kernel map for multi-kernel support:
+    #   pkgbase <TAB> release <TAB> vmlinuz name <TAB> initramfs name
+    local ts="$dest/kernels.tsv" mdir rel pkgbase vname iname
+    : > "$ts"
+    if [[ -d "$X_GEN_ROOT/usr/lib/modules" ]]; then
+        for mdir in "$X_GEN_ROOT"/usr/lib/modules/*/; do
+            [[ -d "$mdir" ]] || continue
+            rel="$(basename "$mdir")"
+            pkgbase="$(cat "$mdir/pkgbase" 2>/dev/null || true)"
+            [[ -n "$pkgbase" ]] || continue
+            vname=""
+            iname=""
+            [[ -f "$X_GEN_ROOT/boot/vmlinuz-$pkgbase" ]] && vname="vmlinuz-$pkgbase"
+            [[ -f "$X_GEN_ROOT/boot/initramfs-$pkgbase.img" ]] && iname="initramfs-$pkgbase.img"
+            [[ -n "$vname" && -n "$iname" ]] || continue
+            printf '%s\t%s\t%s\t%s\n' "$pkgbase" "$rel" "$vname" "$iname" >> "$ts"
+        done
+    fi
+    [[ -s "$ts" ]] || rm -f "$ts"
+
     [[ "$found" -eq 1 ]]
+}
+
+xgen_gen_kernels() {
+    local f
+    f="$(xgen_gen_dir "$1")/boot/kernels.tsv"
+    [[ -f "$f" ]] && cat "$f"
+    return 0
+}
+
+# Pairs a vmlinuz with its matching initramfs by name suffix
+# (linux -> initramfs-linux.img, linux-lts -> initramfs-linux-lts.img),
+# echoing "kernel|initrd". Used for legacy generations without kernels.tsv.
+xgen_pick_pair() {
+    local dir="$1" k name i
+    k="$(find "$dir" -maxdepth 1 -name 'vmlinuz-*' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || k=""
+    [[ -n "$k" ]] || return 0
+    name="${k##*/vmlinuz-}"
+    i="$dir/initramfs-$name.img"
+    if [[ ! -f "$i" ]]; then
+        i="$(find "$dir" -maxdepth 1 -name 'initramfs-*.img' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || i=""
+    fi
+    [[ -n "$i" && -f "$i" ]] || return 0
+    printf '%s|%s\n' "$k" "$i"
+}
+
+xgen_primary_pkgbase() {
+    local id="$1" rel pkgbase release
+    rel="$(xgen_manifest_field "$id" release)"
+    while IFS=$'\t' read -r pkgbase release _ _; do
+        [[ -n "$pkgbase" ]] || continue
+        if [[ -n "$rel" && "$release" == "$rel" ]]; then
+            printf '%s\n' "$pkgbase"
+            return 0
+        fi
+    done < <(xgen_gen_kernels "$id")
+    return 0
+}
+
+xgen_gen_bootable() {
+    local id="$1"
+    [[ -s "$(xgen_gen_dir "$id")/boot/kernels.tsv" ]] && return 0
+    [[ -n "$(xgen_pick_pair "$(xgen_gen_dir "$id")/boot")" ]]
 }
 
 # Rewrites the /etc hash in a manifest (used to re-anchor it to the snapshot).
@@ -482,41 +550,9 @@ xgen_boot_enabled() {
     [[ "$(xgen_backend)" == "btrfs" && -d "$X_GEN_BOOT_DIR" ]]
 }
 
-xgen_pick_kernel() {
-    local f
-    f="$(find "$(xgen_gen_dir "$1")/boot" -maxdepth 1 -name 'vmlinuz-*' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || f=""
-    if [[ -n "$f" ]]; then
-        printf '%s\n' "$f"
-    fi
-    return 0
-}
 
-xgen_pick_initrd() {
-    local f
-    f="$(find "$(xgen_gen_dir "$1")/boot" -maxdepth 1 -name 'initramfs-*.img' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || f=""
-    if [[ -n "$f" ]]; then
-        printf '%s\n' "$f"
-    fi
-    return 0
-}
 
-xgen_pick_boot_kernel() {
-    local f
-    f="$(find "$X_GEN_BOOT_DIR" -maxdepth 1 -name 'vmlinuz-*' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || f=""
-    if [[ -n "$f" ]]; then
-        printf '%s\n' "$f"
-    fi
-    return 0
-}
 
-xgen_pick_boot_initrd() {
-    local f
-    f="$(find "$X_GEN_BOOT_DIR" -maxdepth 1 -name 'initramfs-*.img' -type f 2>/dev/null | LC_ALL=C sort | head -1)" || f=""
-    if [[ -n "$f" ]]; then
-        printf '%s\n' "$f"
-    fi
-    return 0
-}
 
 xgen_boot_sync() {
     local force="${1:-}"
@@ -577,9 +613,7 @@ xgen_boot_sync() {
     local bootable_ids=()
     for id in "${keep_ids[@]}"; do
         [[ -n "${keep[$id]:-}" ]] || continue
-        if [[ "$id" == "$running" ]]; then
-            bootable_ids+=("$id")
-        elif [[ -n "$(xgen_pick_kernel "$id")" && -n "$(xgen_pick_initrd "$id")" ]]; then
+        if [[ "$id" == "$running" ]] || xgen_gen_bootable "$id"; then
             bootable_ids+=("$id")
         fi
     done
@@ -595,62 +629,92 @@ xgen_boot_sync() {
     fi
 
     mkdir -p "$bootdir/x"
-    local entries="" lin initrd cmd title kfile ifile dest
+    local entries="" cmd title
     for id in "${keep_ids[@]}"; do
         [[ -n "${keep[$id]:-}" ]] || continue
-        if [[ "$id" == "$running" ]]; then
-            # The running generation boots the live ESP kernel (its root
-            # mutates in place); name it from the ESP, whatever kernel it is.
-            local bootk booti
-            bootk="$(xgen_pick_boot_kernel)"
-            booti="$(xgen_pick_boot_initrd)"
-            if [[ -n "$bootk" ]]; then
-                lin="/${bootk##*/}"
+
+        # Per-kernel rows (multi-kernel): pkgbase|release|vmlinuz|initramfs.
+        local rows=() row pkgbase rel vname iname kfile ifile dest subdir
+        local primary="" rp
+        while IFS=$'\t' read -r pkgbase rel vname iname; do
+            [[ -n "$pkgbase" ]] && rows+=("$pkgbase|$rel|$vname|$iname")
+        done < <(xgen_gen_kernels "$id")
+        if [[ "${#rows[@]}" -eq 0 ]]; then
+            # Legacy single-kernel generation (no kernels.tsv): pair the
+            # kernel with its initramfs by name suffix.
+            local pair=""
+            if [[ "$id" == "$running" ]]; then
+                pair="$(xgen_pick_pair "$bootdir")"
             else
-                lin="/vmlinuz-linux"
+                pair="$(xgen_pick_pair "$(xgen_gen_dir "$id")/boot")"
             fi
-            if [[ -n "$booti" ]]; then
-                initrd="/${booti##*/}"
-            else
-                initrd="/initramfs-linux.img"
-            fi
-        else
-            kfile="$(xgen_pick_kernel "$id")"
-            ifile="$(xgen_pick_initrd "$id")"
-            if [[ -z "$kfile" || -z "$ifile" ]]; then
+            if [[ -z "$pair" ]]; then
                 xgen_warn "generation $id has no archived kernel; entry skipped"
                 continue
             fi
-            dest="$bootdir/x/gen-$id"
-            mkdir -p "$dest"
-            cp -a "$kfile" "$dest/${kfile##*/}"
-            cp -a "$ifile" "$dest/${ifile##*/}"
-            lin="/x/gen-$id/${kfile##*/}"
-            initrd="/x/gen-$id/${ifile##*/}"
+            IFS='|' read -r kfile ifile <<< "$pair"
+            rows=("default|$(xgen_manifest_field "$id" release)|${kfile##*/}|${ifile##*/}")
         fi
-        cmd="$(xgen_cmdline_for_gen "$id")"
-        title="X Linux (gen $id, $(xgen_manifest_field "$id" reason))"
-        title="${title//\"/\'}"
-        if [[ -n "$def" && "$id" == "$def" ]]; then
-            def_lin="$lin"
-            def_initrd="$initrd"
-            def_cmd="$cmd"
+        primary="$(xgen_primary_pkgbase "$id")"
+        if [[ -z "$primary" ]]; then
+            for rp in "${rows[@]}"; do
+                primary="${rp%%|*}"
+                break
+            done
         fi
-        if [[ "$have_sb" -eq 1 ]]; then
-            {
-                printf 'title   %s\n' "$title"
-                printf 'linux   %s\n' "$lin"
-                printf 'initrd  %s\n' "$initrd"
-                printf 'options %s\n' "$cmd"
-            } > "$sb_dir/x-gen-$id.conf"
-        fi
-        if [[ "$have_grub" -eq 1 ]]; then
-            entries="$entries
-menuentry \"$title\" --id x-gen-$id {
+
+        for row in "${rows[@]}"; do
+            IFS='|' read -r pkgbase rel vname iname <<< "$row"
+            local suffix="" lin initrd
+            subdir=""
+            [[ "$pkgbase" != "$primary" ]] && suffix="-$pkgbase"
+            if [[ "$id" == "$running" ]]; then
+                # The running generation boots the live ESP kernels (its root
+                # mutates in place); frozen kernels may not match its modules.
+                if [[ ! -f "$bootdir/$vname" || ! -f "$bootdir/$iname" ]]; then
+                    xgen_warn "generation $id: $pkgbase kernel missing on the ESP; entry skipped"
+                    continue
+                fi
+                lin="/$vname"
+                initrd="/$iname"
+            else
+                [[ "$pkgbase" == "default" ]] || subdir="$pkgbase"
+                if [[ ! -f "$(xgen_gen_dir "$id")/boot/$vname" || ! -f "$(xgen_gen_dir "$id")/boot/$iname" ]]; then
+                    xgen_warn "generation $id has no archived $pkgbase kernel; entry skipped"
+                    continue
+                fi
+                dest="$bootdir/x/gen-$id${subdir:+/$subdir}"
+                mkdir -p "$dest"
+                cp -a "$(xgen_gen_dir "$id")/boot/$vname" "$dest/$vname"
+                cp -a "$(xgen_gen_dir "$id")/boot/$iname" "$dest/$iname"
+                lin="/x/gen-$id${subdir:+/$subdir}/$vname"
+                initrd="/x/gen-$id${subdir:+/$subdir}/$iname"
+            fi
+            cmd="$(xgen_cmdline_for_gen "$id")"
+            title="X Linux (gen $id, $(xgen_manifest_field "$id" reason))"
+            [[ -z "$suffix" ]] || title="$title [$pkgbase]"
+            title="${title//\"/\'}"
+            if [[ -n "$def" && "$id" == "$def" && -z "$suffix" ]]; then
+                def_lin="$lin"
+                def_initrd="$initrd"
+                def_cmd="$cmd"
+            fi
+            if [[ "$have_sb" -eq 1 ]]; then
+                {
+                    printf 'title   %s\n' "$title"
+                    printf 'linux   %s\n' "$lin"
+                    printf 'initrd  %s\n' "$initrd"
+                    printf 'options %s\n' "$cmd"
+                } > "$sb_dir/x-gen-$id$suffix.conf"
+            fi
+            if [[ "$have_grub" -eq 1 ]]; then
+                entries="$entries
+menuentry \"$title\" --id x-gen-$id$suffix {
     linux $lin $cmd
     initrd $initrd
 }"
-        fi
+            fi
+        done
     done
 
     # Prune ESP copies/entries outside the keep set.
@@ -661,6 +725,10 @@ menuentry \"$title\" --id x-gen-$id {
         if [[ -z "${keep[$id]:-}" ]]; then
             rm -rf "$d"
             rm -f "$sb_dir/x-gen-$id.conf"
+            local e
+            for e in "$sb_dir/x-gen-$id-"*.conf; do
+                [[ -e "$e" ]] && rm -f "$e"
+            done
         fi
     done
 
