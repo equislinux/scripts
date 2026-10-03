@@ -1287,6 +1287,47 @@ xgen_status() {
     fi
 }
 
+# --- btrfs quotas (space limits) --------------------------------------------
+
+# Enables btrfs quotas on the snapshots subvolume and optionally sets an
+# exclusive limit (X_GEN_QGROUP or --limit, e.g. 50G). Exclusive limits only
+# count the snapshots' own data, which is what a retention budget wants.
+xgen_quota_init() {
+    local limit="${1:-${X_GEN_QGROUP:-}}"
+    [[ "$(xgen_backend)" == "btrfs" ]] || xgen_die "btrfs quotas require the btrfs backend"
+    [[ "$(id -u)" -eq 0 ]] || xgen_die "quota init requires root"
+    command -v btrfs >/dev/null 2>&1 || xgen_die "btrfs-progs is required"
+    [[ -d "$X_GEN_SNAPSHOTS" ]] || xgen_die "snapshots dir missing: $X_GEN_SNAPSHOTS"
+    if ! btrfs quota enable "$X_GEN_SNAPSHOTS" >/dev/null 2>&1; then
+        xgen_die "could not enable btrfs quotas on $X_GEN_SNAPSHOTS"
+    fi
+    if [[ -n "$limit" ]]; then
+        [[ "$limit" =~ ^[0-9]+([.][0-9]+)?([KMGTP]i?B?)?$ ]] || xgen_die "invalid limit '$limit' (e.g. 50G)"
+        btrfs qgroup limit -e "$limit" "$X_GEN_SNAPSHOTS" >/dev/null \
+            || xgen_die "could not set the limit on $X_GEN_SNAPSHOTS"
+        xgen_log "snapshots limited to $limit (exclusive) in $X_GEN_SNAPSHOTS"
+    else
+        xgen_log "btrfs quotas enabled in $X_GEN_SNAPSHOTS (set a limit with --limit)"
+    fi
+}
+
+xgen_quota_status() {
+    if [[ "$(xgen_backend)" != "btrfs" ]]; then
+        echo "quota:  unavailable (backend: $(xgen_backend))"
+        return 0
+    fi
+    echo "path:   $X_GEN_SNAPSHOTS"
+    local usage=""
+    usage="$(btrfs filesystem du -s "$X_GEN_SNAPSHOTS" 2>/dev/null | tail -1 | awk '{print $1}')" || usage=""
+    [[ -n "$usage" ]] && echo "usage:  $usage"
+    if btrfs qgroup show -reF "$X_GEN_SNAPSHOTS" >/dev/null 2>&1; then
+        echo "qgroups:"
+        btrfs qgroup show -eF "$X_GEN_SNAPSHOTS" 2>/dev/null | sed 's/^/  /'
+    else
+        echo "qgroups: not enabled (run 'x gen quota init')"
+    fi
+}
+
 # --- export and import ------------------------------------------------------
 
 # Packs a generation into a portable bundle (metadata always; snapshot data

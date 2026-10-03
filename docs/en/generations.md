@@ -204,6 +204,7 @@ outside `x update`" gap: any manual pacman transaction is captured.
 | `X_GEN_BOOT_DIR` | `/boot` | ESP path holding kernels and boot entries |
 | `X_GEN_BOOT_KEEP` | `3` | Generations kept in the boot menu |
 | `X_GEN_KEEP` | `5` | Generations kept by `x gen prune` (same rules: pinned/running/default) |
+| `X_GEN_QGROUP` | — | Exclusive size limit for `x gen quota init` (e.g. `50G`) |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` for the live generation (installer: `/@`) |
 | `X_GEN_RUNNING` | from cmdline | Running generation id (tests) |
 | `X_GEN_SKIP` | `0` | `1` disables automatic generations in hooks |
@@ -250,8 +251,8 @@ install/enable/theme) and `x gen apply` executes them:
 ## Not implemented yet
 
 Boot load-on-selection (rollback is a command, like
-`nixos-rebuild --rollback`), SELinux/secure-boot UKIs, the disk-space limit
-via btrfs qgroups, and time-based retention.
+`nixos-rebuild --rollback`), SELinux/secure-boot UKIs, and time-based
+retention.
 
 ## Tests
 

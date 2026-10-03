@@ -165,6 +165,14 @@ check "x gen new records the next id" test -d "$X_GEN_DIR/0003"
 UNSUP="$(X_GEN_BACKEND=off bash "$SRC/bin/x" gen list)"
 check "off backend reports unsupported" grep -q 'not supported' <<< "$UNSUP"
 
+if ( xgen_quota_init 1G ) >/dev/null 2>&1; then
+    check "quota init requires the btrfs backend" false
+else
+    check "quota init requires the btrfs backend" true
+fi
+QOUT="$(bash "$SRC/bin/x-gen-quota.sh" status)"
+check "quota status cli reports unavailable" grep -q 'unavailable' <<< "$QOUT"
+
 if [[ "$(id -u)" -ne 0 ]]; then
     mkdir -p "$TMP/noperm/generations"
     chmod 000 "$TMP/noperm/generations" 2>/dev/null || true

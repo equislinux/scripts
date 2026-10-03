@@ -153,6 +153,18 @@ umount "$CHECKMNT2"
 rmdir "$CHECKMNT2"
 CHECKMNT2=""
 
+echo "== btrfs quotas =="
+xgen_quota_init "1G" >/dev/null
+check "quota init succeeds" btrfs qgroup show -eF "$X_GEN_SNAPSHOTS"
+QOUT="$(xgen_quota_status)"
+check "quota status shows the snapshots path" grep -q "$X_GEN_SNAPSHOTS" <<< "$QOUT"
+check "quota status shows the exclusive limit" grep -qE '1\.00GiB|1073741824' <<< "$QOUT"
+if ( xgen_quota_init "bogus" ) >/dev/null 2>&1; then
+    check "invalid quota limit fails" false
+else
+    check "invalid quota limit fails" true
+fi
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "generations-btrfs: OK"
 else

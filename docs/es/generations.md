@@ -58,6 +58,9 @@ todas las generaciones (los snapshots no los capturan). El manifiesto hashea
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restaura todos los archivos de un paquete (db pacman/xpm del snapshot) |
 | `x gen export <id> [--out FILE] [--with-data]` | Empaqueta una generación como bundle portable |
 | `x gen import <file> [--force]` | Importa un bundle a `$X_GEN_STATE` (`--force` reemplaza) |
+| `x gen quota init [--limit SIZE]` / `status` | Habilita quotas btrfs y muestra uso / tabla de qgroups |
+| `x gen plan <system.toml>` | Imprime las acciones para cumplir la declaración declarativa |
+| `x gen apply <system.toml> [--dry-run]` | Aplica la declaración y registra una generación |
 
 ```bash
 sudo x gen new --reason manual --label "antes de tocar"
@@ -205,12 +208,23 @@ capturada.
 | `X_GEN_BOOT_DIR` | `/boot` | Ruta del ESP con kernels y entries |
 | `X_GEN_BOOT_KEEP` | `3` | Generaciones retenidas en el menú de boot |
 | `X_GEN_KEEP` | `5` | Generaciones retenidas por `x gen prune` (mismas reglas: pinned/running/default) |
+| `X_GEN_QGROUP` | — | Límite de tamaño exclusivo para `x gen quota init` (p.ej. `50G`) |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (instalador: `/@`) |
 | `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests) |
 | `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks |
 
 En un sistema no-btrfs (o WSL) `xgen_supported` es falso y cada hook es un
 no-op; la CLI reporta que las generaciones no están disponibles.
+
+## Límite de espacio (qgroups de btrfs)
+
+`x gen quota init [--limit SIZE]` habilita quotas btrfs en el subvolumen de
+snapshots y fija un límite **exclusivo** (`btrfs qgroup limit -e`), así el
+presupuesto solo cuenta los datos propios de los snapshots. `x gen quota
+status` muestra el uso y la tabla de qgroups. El límite lo aplica btrfs
+(las escrituras fallan al excederse), así que conviene combinarlo con
+retención (`x gen prune --keep N`) y dejar margen; los scripts nunca fijan un
+límite solos.
 
 ## Sistema declarativo (`system.toml`)
 
@@ -252,8 +266,7 @@ instalar/habilitar/tema) y `x gen apply` las ejecuta:
 ## Todavía no implementado
 
 Boot por selección en el menú (el rollback es un comando, como
-`nixos-rebuild --rollback`), UKIs con Secure Boot, el límite de espacio con
-qgroups de btrfs y retención por tiempo.
+`nixos-rebuild --rollback`), UKIs con Secure Boot y retención por tiempo.
 
 ## Tests
 
