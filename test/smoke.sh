@@ -162,6 +162,9 @@ fi
 if ! bash "$SRC/test/generations-multikernel.sh"; then
     FAIL=1
 fi
+if ! bash "$SRC/test/generations-system.sh"; then
+    FAIL=1
+fi
 if ! bash "$SRC/test/pacman-hooks.sh"; then
     FAIL=1
 fi

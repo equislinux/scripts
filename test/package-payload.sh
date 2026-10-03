@@ -47,6 +47,7 @@ else
     for f in \
         usr/share/x/install/helpers/xgen.sh \
         usr/share/x/install/helpers/xgen-home.sh \
+        usr/share/x/install/helpers/xgen-system.sh \
         usr/share/x/bin/x-gen-new.sh \
         usr/share/x/bin/x-gen-boot.sh \
         usr/share/x/bin/x-home-new.sh \
@@ -60,6 +61,8 @@ else
     check "xgen.sh matches the branch" cmp -s "$TMP/xgen.sh" "$SRC/install/helpers/xgen.sh"
     tar -xOf "$pkg" usr/share/x/install/helpers/xgen-home.sh > "$TMP/xgen-home.sh"
     check "xgen-home.sh matches the branch" cmp -s "$TMP/xgen-home.sh" "$SRC/install/helpers/xgen-home.sh"
+    tar -xOf "$pkg" usr/share/x/install/helpers/xgen-system.sh > "$TMP/xgen-system.sh"
+    check "xgen-system.sh matches the branch" cmp -s "$TMP/xgen-system.sh" "$SRC/install/helpers/xgen-system.sh"
 fi
 
 echo "== bundled payload (x repo) =="

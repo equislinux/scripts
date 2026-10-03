@@ -47,6 +47,8 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x gen restore <path>` | Restaura un archivo/directorio desde una generación (`--from ID`, `--dest PATH`). |
 | `x gen restore --pkg <name>` | Restaura todos los archivos de un paquete. |
 | `x gen export` / `x gen import` | Empaqueta/restaura un bundle de generación (`--with-data`, `--force`). |
+| `x gen plan` | Imprime las acciones para cumplir una declaración `system.toml`. |
+| `x gen apply` | Aplica una declaración `system.toml` (`--dry-run`); registra una generación. |
 | `x home` / `x home list` | Lista las generaciones de home del usuario (dotfiles). |
 | `x home new` / `status` / `diff` / `restore` / `prune` | Ciclo de vida de las generaciones de home. Ver `generations.md`. |
 

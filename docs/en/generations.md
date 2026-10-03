@@ -211,10 +211,11 @@ outside `x update`" gap: any manual pacman transaction is captured.
 On a non-btrfs system (or WSL) `xgen_supported` is false and every hook is a
 no-op; the CLI reports that generations are unavailable.
 
-## Declarative system (design, not implemented)
+## Declarative system (`system.toml`)
 
-The intended final layer mirrors `configuration.nix`: a `system.toml`
-reconciled with `x gen plan` / `x gen apply`:
+The declarative layer mirrors `configuration.nix`: a `system.toml` reconciled
+with `x gen plan` (read-only) and `x gen apply` (executes and records a
+generation with `reason: apply`):
 
 ```toml
 [system]
@@ -232,17 +233,25 @@ enable = ["NetworkManager"]
 name = "x-dark"
 ```
 
-`x gen plan system.toml` would print the actions (install/remove/enable/
-disable/theme) and `x gen apply` would execute them through pacman/systemctl
-and record a generation whose manifest stores the file hash. Open decisions
-for when the base is validated: removal policy for packages outside the
-declaration, and how `apply` interacts with a pending rollback.
+`x gen plan system.toml` prints the actions (set hostname/timezone/locale,
+install/enable/theme) and `x gen apply` executes them:
+
+- `[system]` — hostname, timezone and locale are set only when they differ.
+- `[packages] explicit` — missing packages are installed with
+  `pacman -S --needed`; installed packages outside the declaration are
+  reported but **kept** unless `prune = true`.
+- `[services] enable` — missing units are enabled with `systemctl enable`.
+- `[theme] name` — applied through `x theme set` as the invoking user.
+- `apply` supports `--dry-run` and honors `X_DRY_RUN=1`; the system actions
+  need root/sudo. Removals never happen without `prune`.
+- After applying, a generation is recorded (best effort) so the change can be
+  diffed or rolled back like any other.
 
 ## Not implemented yet
 
-The declarative `system.toml` + `x gen apply` (design above), boot
-load-on-selection (rollback is a command, like `nixos-rebuild --rollback`),
-SELinux/secure-boot UKIs and the disk-space limit via btrfs qgroups.
+Boot load-on-selection (rollback is a command, like
+`nixos-rebuild --rollback`), SELinux/secure-boot UKIs, the disk-space limit
+via btrfs qgroups, and time-based retention.
 
 ## Tests
 
@@ -252,6 +261,8 @@ SELinux/secure-boot UKIs and the disk-space limit via btrfs qgroups.
   frozen kernels, ESP retention, rollback, pin/unpin, prune, pending state.
 - `test/generations-multikernel.sh` — per-pkgbase entries for `linux` +
   `linux-lts`, archived kernel layout and legacy fallback.
+- `test/generations-system.sh` — `system.toml` parser, plan actions, prune
+  policy and dry-run apply.
 - `test/pacman-hooks.sh` — wrapper guards (no current, `X_GEN_SKIP`), reasons
   and shipped hook files.
 - `test/generations-export.sh` — export/import round-trip (metadata and data),

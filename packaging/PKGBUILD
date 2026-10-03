@@ -1,7 +1,7 @@
 # Maintainer: Xscriptor <dev@xscriptor.com>
 pkgname=x-scripts
 pkgver=0.1.0
-pkgrel=19
+pkgrel=20
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
 url="https://github.com/xlnux/scripts"
