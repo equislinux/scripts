@@ -1334,7 +1334,7 @@ xgen_quota_status() {
 # with --with-data). The archive is tar.zst when zstd is available, tar.gz
 # otherwise.
 xgen_export() {
-    local id="$1" out="${2:-}" with_data="${3:-0}"
+    local id="$1" out="${2:-}" with_data="${3:-0}" sign="${4:-0}"
     [[ -n "$id" ]] || xgen_die "usage: x gen export <id> [--out FILE] [--with-data]"
     [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
     xgen_check_state_readable
@@ -1396,6 +1396,19 @@ xgen_export() {
     else
         tar -czf "$out" -C "$tmpdir" . || { rm -rf "$tmpdir"; xgen_die "export failed"; }
     fi
+
+    if [[ "$sign" == "1" ]]; then
+        local key="${X_GEN_SIGN_KEY:-}"
+        if [[ -z "$key" ]]; then
+            rm -rf "$tmpdir"
+            xgen_die "X_GEN_SIGN_KEY is not set (required for --sign)"
+        fi
+        command -v gpg >/dev/null 2>&1 || { rm -rf "$tmpdir"; xgen_die "gpg is required for --sign"; }
+        gpg --batch --yes --local-user "$key" --detach-sign --output "$out.sig" "$out" \
+            || { rm -rf "$tmpdir"; xgen_die "failed to sign $out"; }
+        xgen_log "signed bundle: $out.sig"
+    fi
+
     rm -rf "$tmpdir"
     xgen_log "generation $id exported to $out"
 }
@@ -1403,7 +1416,7 @@ xgen_export() {
 # Imports a bundle created by xgen_export. Data is imported only when present
 # in the bundle (btrfs: `btrfs receive`, dir: tree copy).
 xgen_import() {
-    local file="$1" force="${2:-0}"
+    local file="$1" force="${2:-0}" allow_metadata="${3:-0}"
     [[ -f "$file" ]] || xgen_die "bundle not found: $file"
     xgen_check_state_readable
 
@@ -1435,6 +1448,15 @@ xgen_import() {
         xgen_warn "bundle has no BUNDLE.sha256; skipping the integrity check"
     fi
 
+    if [[ -f "$file.sig" ]]; then
+        if ! gpg --batch --verify "$file.sig" "$file" >/dev/null 2>&1; then
+            rm -rf "$tmpdir"
+            xgen_die "bundle signature verification failed: $file (import the publisher key first)"
+        fi
+    else
+        xgen_warn "bundle is not signed ($file.sig missing)"
+    fi
+
     local id
     id="$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "$tmpdir/manifest.json" 2>/dev/null | head -1)"
     if [[ -z "$id" ]]; then
@@ -1449,14 +1471,16 @@ xgen_import() {
         xgen_die "generation $id already exists (use --force to replace it)"
     fi
 
-    rm -rf "$dir"
-    mkdir -p "$dir"
-    cp -a "$tmpdir/." "$dir/"
-    rm -f "$dir/BUNDLE.txt"
-
+    # Data first: a bundle whose snapshot cannot be imported must fail before
+    # any trace of the generation lands in the state.
     if [[ -f "$tmpdir/snapshot.btrfs" ]]; then
-        [[ "$(xgen_backend)" == "btrfs" ]] || xgen_warn "btrfs data in the bundle but the backend is not btrfs; snapshot skipped"
-        if [[ "$(xgen_backend)" == "btrfs" ]]; then
+        if [[ "$(xgen_backend)" != "btrfs" ]]; then
+            if [[ "$allow_metadata" != "1" ]]; then
+                rm -rf "$tmpdir"
+                xgen_die "bundle contains btrfs data but the backend is not btrfs (use --allow-metadata-only to skip the snapshot)"
+            fi
+            xgen_warn "btrfs data in the bundle but the backend is not btrfs; snapshot skipped"
+        else
             [[ "$(id -u)" -eq 0 ]] || { rm -rf "$tmpdir"; xgen_die "btrfs data import requires root"; }
             mkdir -p "$X_GEN_SNAPSHOTS"
             if btrfs receive "$X_GEN_SNAPSHOTS" < "$tmpdir/snapshot.btrfs" >/dev/null 2>&1; then
@@ -1475,6 +1499,10 @@ xgen_import() {
                     btrfs subvolume delete "$X_GEN_SNAPSHOTS/.export-$id" >/dev/null 2>&1 || true
                 fi
             else
+                if [[ "$allow_metadata" != "1" ]]; then
+                    rm -rf "$tmpdir"
+                    xgen_die "btrfs receive failed for $file (use --allow-metadata-only to keep the metadata)"
+                fi
                 xgen_warn "btrfs receive failed; metadata imported without snapshot data"
             fi
         fi
@@ -1484,6 +1512,10 @@ xgen_import() {
         cp -a "$tmpdir/snapshot" "$X_GEN_SNAPSHOTS/$id"
     fi
 
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    cp -a "$tmpdir/." "$dir/"
+    rm -f "$dir/BUNDLE.txt"
     rm -rf "$tmpdir"
     xgen_log "generation $id imported ('x gen rollback $id' to select it)"
 }

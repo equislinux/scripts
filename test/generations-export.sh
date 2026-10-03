@@ -105,6 +105,36 @@ else
 fi
 check "rejection mentions the checksum" grep -q 'checksum' <<< "$OUT"
 
+echo "== data policy and signing =="
+mkdir -p "$TMP/datab"
+tar -xzf "$TMP/meta.tar.gz" -C "$TMP/datab"
+printf 'raw-btrfs-stream\n' > "$TMP/datab/snapshot.btrfs"
+rm -f "$TMP/datab/BUNDLE.sha256"
+tmpf="$TMP/datab.sums"
+(cd "$TMP/datab" && find . -type f ! -name BUNDLE.sha256 -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum) > "$tmpf"
+mv "$tmpf" "$TMP/datab/BUNDLE.sha256"
+tar -czf "$TMP/datab.tar.gz" -C "$TMP/datab" .
+E="$TMP/e"
+if env X_GEN_BACKEND=dir X_GEN_BOOT=off \
+    X_GEN_ROOT="$E/root" X_GEN_STATE="$E/state" X_GEN_DIR="$E/state/generations" \
+    X_GEN_CURRENT="$E/state/current" X_GEN_SNAPSHOTS="$E/snapshots" \
+    bash "$SRC/bin/x-gen-import.sh" "$TMP/datab.tar.gz" >/dev/null 2>&1; then
+    check "btrfs data on the dir backend fails by default" false
+else
+    check "btrfs data on the dir backend fails by default" true
+fi
+env X_GEN_BACKEND=dir X_GEN_BOOT=off \
+    X_GEN_ROOT="$E/root" X_GEN_STATE="$E/state" X_GEN_DIR="$E/state/generations" \
+    X_GEN_CURRENT="$E/state/current" X_GEN_SNAPSHOTS="$E/snapshots" \
+    bash "$SRC/bin/x-gen-import.sh" "$TMP/datab.tar.gz" --allow-metadata-only >/dev/null 2>&1
+check "--allow-metadata-only imports the metadata" test -f "$E/state/generations/0001/manifest.json"
+
+if X_GEN_SIGN_KEY= bash "$SRC/bin/x-gen-export.sh" 0001 --out "$TMP/unsigned.tar.gz" --sign >/dev/null 2>&1; then
+    check "--sign without a key fails" false
+else
+    check "--sign without a key fails" true
+fi
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "generations-export: OK"
 else

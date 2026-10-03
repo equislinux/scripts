@@ -10,15 +10,18 @@ source "$X_ROOT/install/helpers/xgen.sh"
 ID=""
 OUT=""
 DATA=0
+SIGN=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --out) OUT="${2:?--out needs a path}"; shift 2 ;;
         --with-data) DATA=1; shift ;;
+        --sign) SIGN=1; shift ;;
         -h|--help)
-            echo "usage: x gen export <id> [--out FILE] [--with-data]"
+            echo "usage: x gen export <id> [--out FILE] [--with-data] [--sign]"
             echo "  --out FILE      output bundle (default: x-gen-<id>-<date>.tar.zst)"
             echo "  --with-data     include the snapshot (btrfs send / tree copy; root on btrfs)"
+            echo "  --sign          sign the bundle with X_GEN_SIGN_KEY (gpg detached .sig)"
             exit 0
             ;;
         -*)
@@ -36,5 +39,5 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "$ID" ]] || { echo "usage: x gen export <id> [--out FILE] [--with-data]" >&2; exit 1; }
-xgen_export "$ID" "$OUT" "$DATA"
+[[ -n "$ID" ]] || { echo "usage: x gen export <id> [--out FILE] [--with-data] [--sign]" >&2; exit 1; }
+xgen_export "$ID" "$OUT" "$DATA" "$SIGN"

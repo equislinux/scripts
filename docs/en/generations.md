@@ -55,8 +55,8 @@ generation (it is not captured by the snapshots). The manifest hashes `/etc`
 | `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Removes old generations (pinned, running and default always stay) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restores a file or directory from a snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restores every file owned by a package (pacman/xpm db inside the snapshot) |
-| `x gen export <id> [--out FILE] [--with-data]` | Packs a generation into a portable bundle |
-| `x gen import <file> [--force]` | Imports a bundle into `$X_GEN_STATE` (`--force` replaces) |
+| `x gen export <id> [--out FILE] [--with-data] [--sign]` | Packs (and optionally signs) a generation into a portable bundle |
+| `x gen import <file> [--force] [--allow-metadata-only]` | Imports a bundle into `$X_GEN_STATE` (`--force` replaces) |
 
 ```bash
 sudo x gen new --reason manual --label "before tinkering"
@@ -137,10 +137,15 @@ migrations, archived kernel) as `tar.zst` (or `tar.gz` without zstd).
 `--with-data` adds the snapshot itself: `btrfs send` on btrfs (root) or a tree
 copy with the `dir` backend. Bundles carry `BUNDLE.sha256` (hash of every
 file) and `x gen import` verifies it, aborting on mismatch; bundles without
-the manifest (older format) import with a warning. Restoring a `btrfs send`
-stream forks the received subvolume to keep the generation writable. The
-imported generation is not selected automatically — use `x gen rollback <id>`
-after importing. Duplicates fail unless `--force`.
+the manifest (older format) import with a warning. `--sign` adds a detached
+gpg signature (`<bundle>.sig`) with `X_GEN_SIGN_KEY`; import verifies it when
+present and warns when missing. Import is strict about data: if the bundle
+carries a btrfs snapshot that cannot be imported (wrong backend, receive
+failure) it aborts before touching the state unless
+`--allow-metadata-only` is given. Restoring a `btrfs send` stream forks the
+received subvolume to keep the generation writable. The imported generation
+is not selected automatically — use `x gen rollback <id>` after importing.
+Duplicates fail unless `--force`.
 
 This is the portability path: moving a generation between machines or backing
 it up without `btrfs send`/`receive` knowledge, and the base for the WSL
@@ -205,6 +210,7 @@ outside `x update`" gap: any manual pacman transaction is captured.
 | `X_GEN_BOOT_KEEP` | `3` | Generations kept in the boot menu |
 | `X_GEN_KEEP` | `5` | Generations kept by `x gen prune` (same rules: pinned/running/default) |
 | `X_GEN_QGROUP` | — | Exclusive size limit for `x gen quota init` (e.g. `50G`) |
+| `X_GEN_SIGN_KEY` | — | gpg key id used by `x gen export --sign` |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` for the live generation (installer: `/@`) |
 | `X_GEN_RUNNING` | from cmdline | Running generation id (tests) |
 | `X_GEN_SKIP` | `0` | `1` disables automatic generations in hooks |

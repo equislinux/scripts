@@ -56,8 +56,8 @@ todas las generaciones (los snapshots no los capturan). El manifiesto hashea
 | `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Elimina generaciones viejas (pinned, running y default siempre quedan) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restaura un archivo o directorio desde un snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restaura todos los archivos de un paquete (db pacman/xpm del snapshot) |
-| `x gen export <id> [--out FILE] [--with-data]` | Empaqueta una generación como bundle portable |
-| `x gen import <file> [--force]` | Importa un bundle a `$X_GEN_STATE` (`--force` reemplaza) |
+| `x gen export <id> [--out FILE] [--with-data] [--sign]` | Empaqueta (y opcionalmente firma) una generación como bundle portable |
+| `x gen import <file> [--force] [--allow-metadata-only]` | Importa un bundle a `$X_GEN_STATE` (`--force` reemplaza) |
 | `x gen quota init [--limit SIZE]` / `status` | Habilita quotas btrfs y muestra uso / tabla de qgroups |
 | `x gen plan <system.toml>` | Imprime las acciones para cumplir la declaración declarativa |
 | `x gen apply <system.toml> [--dry-run]` | Aplica la declaración y registra una generación |
@@ -141,10 +141,15 @@ capturas, migraciones, kernel archivado) como `tar.zst` (o `tar.gz` sin zstd).
 `--with-data` agrega el snapshot: `btrfs send` en btrfs (root) o copia del
 árbol con backend `dir`. Los bundles llevan `BUNDLE.sha256` (hash de cada
 archivo) y `x gen import` lo verifica, abortando si no coincide; los bundles
-sin manifiesto (formato viejo) importan con un warning. Al restaurar un stream
-`btrfs send` se bifurca el subvolumen recibido para que la generación quede
-escribible. La generación importada no se selecciona automáticamente — usá
-`x gen rollback <id>` después. Los duplicados fallan salvo `--force`.
+sin manifiesto (formato viejo) importan con un warning. `--sign` agrega una
+firma gpg separada (`<bundle>.sig`) con `X_GEN_SIGN_KEY`; el import la verifica
+si está presente y avisa si falta. El import es estricto con los datos: si el
+bundle trae un snapshot btrfs que no se puede importar (backend distinto, falla
+de receive) aborta antes de tocar el estado salvo `--allow-metadata-only`. Al
+restaurar un stream `btrfs send` se bifurca el subvolumen recibido para que la
+generación quede escribible. La generación importada no se selecciona
+automáticamente — usá `x gen rollback <id>` después. Los duplicados fallan
+salvo `--force`.
 
 Es la vía de portabilidad: mover una generación entre máquinas o respaldarla
 sin saber de `btrfs send`/`receive`, y la base del modo degradado de WSL.
@@ -209,6 +214,7 @@ capturada.
 | `X_GEN_BOOT_KEEP` | `3` | Generaciones retenidas en el menú de boot |
 | `X_GEN_KEEP` | `5` | Generaciones retenidas por `x gen prune` (mismas reglas: pinned/running/default) |
 | `X_GEN_QGROUP` | — | Límite de tamaño exclusivo para `x gen quota init` (p.ej. `50G`) |
+| `X_GEN_SIGN_KEY` | — | Id de clave gpg usada por `x gen export --sign` |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (instalador: `/@`) |
 | `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests) |
 | `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks |

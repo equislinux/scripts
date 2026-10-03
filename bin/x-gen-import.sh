@@ -9,13 +9,16 @@ source "$X_ROOT/install/helpers/xgen.sh"
 
 FILE=""
 FORCE=0
+ALLOW_METADATA=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --force) FORCE=1; shift ;;
+        --allow-metadata-only) ALLOW_METADATA=1; shift ;;
         -h|--help)
-            echo "usage: x gen import <file> [--force]"
-            echo "  --force   replace the generation if it already exists"
+            echo "usage: x gen import <file> [--force] [--allow-metadata-only]"
+            echo "  --force                  replace the generation if it already exists"
+            echo "  --allow-metadata-only    keep the metadata if the btrfs snapshot cannot be imported"
             exit 0
             ;;
         -*)
@@ -33,5 +36,5 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "$FILE" ]] || { echo "usage: x gen import <file> [--force]" >&2; exit 1; }
-xgen_import "$FILE" "$FORCE"
+[[ -n "$FILE" ]] || { echo "usage: x gen import <file> [--force] [--allow-metadata-only]" >&2; exit 1; }
+xgen_import "$FILE" "$FORCE" "$ALLOW_METADATA"
