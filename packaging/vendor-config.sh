@@ -16,6 +16,7 @@ set -euo pipefail
 #   equisdots/{dots,hyprland,shell,palettes,theme-sync,davincix,timex,login}
 #       <- equisdots org (branch main)
 #   kitty/     <- xscriptor-colors/terminal (emulators/kitty only)
+#                 includes shaders/ (x-glow.slang + x-trail.pipeline)
 #   starship/  <- xscriptor-colors/terminal (prompts/starship only)
 #   nvim/      <- xscriptor-colors/nvim
 #
@@ -161,6 +162,10 @@ if [[ -f "$STAGE/terminal/emulators/kitty/config" ]]; then
 fi
 install_dir "$STAGE/terminal/emulators/kitty/themes" "$XCFG/kitty/themes"
 
+# Custom shaders (neon cursor trail). The shipped kitty.conf wires
+# custom_shaders/cursor_trail*; the compiled pair must travel offline too.
+install_dir "$STAGE/terminal/emulators/kitty/shaders" "$XCFG/kitty/shaders"
+
 # prompts/starship: canonical template + per-palette themes (theme-sync
 # regenerates them from the palettes).
 mkdir -p "$XCFG/starship"
@@ -187,6 +192,8 @@ for f in \
     equisdots/timex/core/timex.sh \
     equisdots/login/install.sh \
     kitty/kitty.conf \
+    kitty/shaders/x-glow.slang \
+    kitty/shaders/x-trail.pipeline \
     starship/starship.toml \
     nvim/init.lua \
 ; do

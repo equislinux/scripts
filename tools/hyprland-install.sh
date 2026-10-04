@@ -100,19 +100,32 @@ if [[ "${X_HYPR_DRYRUN:-0}" == "1" ]]; then
     exit 0
 fi
 
+# --- build jobs vs RAM -------------------------------------------------------
+# AUR source builds (quickshell-git/swayosd-git/...) can exceed 4 GB with one
+# job per core. Limit the jobs on low-RAM machines so the install does not get
+# OOM-killed halfway.
+if [[ -r /proc/meminfo ]]; then
+    MEM_MB="$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)"
+    if (( MEM_MB < 7000 )); then
+        export MAKEFLAGS="-j2"
+        export CARGO_BUILD_JOBS=2
+        log "low RAM (${MEM_MB} MB): limiting AUR build jobs to 2"
+    fi
+fi
+
 # --- package split: official (repos) vs AUR ---------------------------------
 OFFICIAL=(
     hyprland hypridle hyprpolkitagent xdg-desktop-portal-hyprland
     xdg-desktop-portal-gtk xdg-desktop-portal-wlr qt5-wayland qt6-wayland
     qt5ct qt6ct polkit-kde-agent xorg-xwayland
     rofi rofi-emoji jq imagemagick librsvg
-    kitty starship
+    kitty starship shader-slang
     dunst grim slurp wl-clipboard cliphist brightnessctl ddcutil pamixer
     playerctl hyprpicker libnotify iproute2 pciutils rust pavucontrol
     networkmanager sddm pipewire pipewire-alsa pipewire-pulse wireplumber
     network-manager-applet blueman bluez bluez-utils xdg-utils xdg-user-dirs
     wget curl rsync git base-devel gnome-keyring seahorse kwallet5 libsecret
-    noto-fonts noto-fonts-emoji adw-gtk-theme papirus-icon-theme
+    noto-fonts noto-fonts-emoji noto-fonts-cjk adw-gtk-theme papirus-icon-theme
     nautilus gvfs gvfs-mtp cava zbar fd ripgrep socat inotify-tools acpi iw
     lm_sensors bc python python-websockets qt6-websockets ffmpeg fastfetch
     satty yq wmctrl power-profiles-daemon easyeffects lsp-plugins
@@ -280,6 +293,32 @@ offline_payload() {
     fi
 }
 
+# kitty custom shaders: the vendored snapshot ships shaders/ next to the
+# config (which already wires custom_shaders/cursor_trail). Ensure the keys are
+# present (idempotent) and warn when the shader compiler is missing, since kitty
+# disables custom_shaders silently in that case.
+ensure_kitty_shader_config() {
+    local conf="$CONFIG_DIR/kitty/kitty.conf" added=0
+    [[ -f "$conf" ]] || return 0
+    if ! grep -qE '^[[:space:]]*custom_shaders[[:space:]]' "$conf"; then
+        printf '\ncustom_shaders x-trail\n' >> "$conf"
+        added=1
+    fi
+    if ! grep -qE '^[[:space:]]*cursor_trail[[:space:]]' "$conf"; then
+        printf 'cursor_trail 12\n' >> "$conf"
+        added=1
+    fi
+    if ! grep -qE '^[[:space:]]*cursor_trail_start_threshold[[:space:]]' "$conf"; then
+        printf 'cursor_trail_start_threshold 0\n' >> "$conf"
+        added=1
+    fi
+    [[ "$added" -eq 1 ]] && log "kitty shaders: enabled the neon trail in kitty.conf"
+    if [[ -d "$CONFIG_DIR/kitty/shaders" ]] && ! has_cmd slangc; then
+        warn "kitty shaders: slangc missing (shader-slang); kitty will ignore custom_shaders"
+    fi
+    return 0
+}
+
 if [[ "$MODE" == "offline" ]]; then
     offline_payload
 else
@@ -303,6 +342,7 @@ fi
 if [[ -n "$KITTY_SRC" && -d "$KITTY_SRC" ]]; then
     echo "== kitty config (offline)"
     sync_tree "$KITTY_SRC" "$CONFIG_DIR/kitty" --exclude '.git*'
+    ensure_kitty_shader_config
 fi
 if [[ -n "$STARSHIP_SRC" && -d "$STARSHIP_SRC" ]]; then
     echo "== starship config (offline)"
@@ -426,6 +466,23 @@ ensure_local_bin_path() {
     fi
 }
 ensure_local_bin_path
+
+# zsh: the full profile ships grml-zsh-config, whose own /etc/skel/.zshrc was
+# seeded at useradd time, so the X seed never lands. Append the starship init
+# line idempotently (preserves grml's setup; no-op without starship).
+ensure_zsh_starship_init() {
+    local rc="$HOME/.zshrc"
+    [[ -f "$rc" ]] || return 0
+    if grep -qF "starship init zsh" "$rc" 2>/dev/null; then
+        return 0
+    fi
+    {
+        printf '\n# x: starship prompt\n'
+        printf 'command -v starship >/dev/null 2>&1 && eval "$(starship init zsh)"\n'
+    } >> "$rc"
+    log "starship: init line added to $rc"
+}
+ensure_zsh_starship_init
 
 echo "hyprland setup complete. Reboot and select Hyprland in SDDM."
 log "user-level commands available: dots, theme-sync, davincix, timex (~/.local/bin)"
