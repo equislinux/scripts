@@ -32,6 +32,9 @@ Summaries are the `x:summary` headers of each file (shown by `x help`).
 | `x update` | `pacman -Syu` (privileged) followed by the user's migrations. |
 | `x hardware` | Runs the hardware phase (detection + modules). Requires root. |
 | `x info` | Shows version, repo, user and environment info. |
+| `x agent` / `x agent install` | Installs the Xscriptor AI bundle for OpenCode (`--bundle x\|dev\|full`, `--env NAME`, `--project`, `--dest DIR`, `--source DIR`, `--ref REF`, `--dry-run`, `--list`). Sources resolve from `X_AGENT_SOURCE`/`XSCRIPTOR_AI_DIR`, a sibling `xscriptor-ai` checkout, or a pinned download (`X_AGENT_REF`, cached under `X_AGENT_CACHE`). |
+| `x agent status` | Shows the recorded destinations, item counts and source in use. |
+| `x agent remove` | Removes exactly the files recorded in the manifest (`--dest DIR`, `--all`, `--dry-run`). |
 | `x gen` / `x gen list` | Lists the system generations (`*` marks the current one). See `generations.md`. |
 | `x gen new` | Creates a generation: btrfs snapshot + manifest (`--reason`, `--label`). |
 | `x gen status` | Shows the running vs default generation, pending rollback and `/etc` drift. |

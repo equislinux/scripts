@@ -13,6 +13,7 @@ command argument and all environment variables.
 | Group | Commands |
 |-------|----------|
 | Provisioning | `x setup [--user] [--online]`, `x hardware`, `x migrate`, `x update`, `x theme list/set`, `x info` |
+| AI agents | `x agent install [--bundle x\|dev\|full]`, `x agent status`, `x agent remove` |
 | System generations | `x gen new`, `list`, `status [--json]`, `boot`, `rollback`, `diff`, `verify`, `pin`, `prune`, `restore`, `export`, `import` |
 | Home generations | `x home new`, `list`, `status [--json]`, `diff`, `restore`, `prune` |
 | Help | `x help` |
