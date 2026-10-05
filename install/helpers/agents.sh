@@ -24,6 +24,11 @@ X_AGENT_REF="${X_AGENT_REF:-main}"
 X_AGENT_CACHE="${X_AGENT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/x/agents}"
 X_AGENT_DEFAULT_ENVS=(archiso hyprland)
 
+# Progress/warning output must go to stderr: several helpers return their
+# result on stdout (source path, manifest path) and callers capture it.
+x_agent_log() { printf '[x] %s\n' "$*" >&2; }
+x_agent_warn() { printf '[x!] %s\n' "$*" >&2; }
+
 x_agent_state_dir() {
     printf '%s' "${X_AGENT_STATE:-${XDG_STATE_HOME:-$HOME/.local/state}/x/agents}"
 }
@@ -71,7 +76,7 @@ x_agent_download() {
         rm -rf "$dst"
         mkdir -p "$dst"
         url="https://codeload.github.com/xscriptor-ai/$repo/tar.gz/refs/heads/$X_AGENT_REF"
-        log "downloading xscriptor-ai/$repo@$X_AGENT_REF"
+        x_agent_log "downloading xscriptor-ai/$repo@$X_AGENT_REF"
         if has_cmd curl && has_cmd tar; then
             curl -fsSL "$url" | tar -xz -C "$dst" --strip-components=1
         elif has_cmd git; then
@@ -160,7 +165,7 @@ x_agent_add_envs() {
         envs=("${X_AGENT_DEFAULT_ENVS[@]}")
     fi
     for env in "${envs[@]}"; do
-        x_agent_add_env "$base" "$env" "$dest" "$manifest" || warn "environment not found: $env"
+        x_agent_add_env "$base" "$env" "$dest" "$manifest" || x_agent_warn "environment not found: $env"
     done
 }
 
