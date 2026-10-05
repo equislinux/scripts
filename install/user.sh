@@ -30,3 +30,4 @@ if [[ "${X_HYPRLAND:-1}" == "1" ]]; then
 fi
 
 log "user provisioned"
+log "optional: 'x agent install' provisions the Xscriptor AI agents/skills for OpenCode"

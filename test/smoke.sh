@@ -175,6 +175,58 @@ if ! bash "$SRC/test/home-gens.sh"; then
     FAIL=1
 fi
 
+echo "== agent bundles =="
+AG_SRC="$TMP/xscriptor-ai"
+AG_DEST="$TMP/opencode"
+AG_STATE="$TMP/agent-state"
+mkdir -p "$AG_SRC/agents/agents/general" "$AG_SRC/agents/senior/agents/senior-web" \
+         "$AG_SRC/skills/skills/proj/references" "$AG_SRC/skills/senior/skills/api-design" \
+         "$AG_SRC/skills/commands" \
+         "$AG_SRC/environments/archiso/agents" \
+         "$AG_SRC/environments/archiso/skills/xlnux/references" \
+         "$AG_SRC/environments/archiso/commands" \
+         "$AG_SRC/environments/hyprland/agents" \
+         "$AG_SRC/environments/hyprland/skills/hyprland" \
+         "$AG_SRC/environments/hyprland/commands"
+printf 'a\n' > "$AG_SRC/agents/agents/general/a.md"
+printf 'a\n' > "$AG_SRC/agents/senior/agents/senior-web/w.md"
+printf 's\n' > "$AG_SRC/skills/skills/proj/SKILL.md"
+printf 'r\n' > "$AG_SRC/skills/skills/proj/references/ref.md"
+printf 's\n' > "$AG_SRC/skills/senior/skills/api-design/SKILL.md"
+printf 'c\n' > "$AG_SRC/skills/commands/foo.md"
+printf 'a\n' > "$AG_SRC/environments/archiso/agents/xlnux-generations.md"
+printf 's\n' > "$AG_SRC/environments/archiso/skills/xlnux/SKILL.md"
+printf 'r\n' > "$AG_SRC/environments/archiso/skills/xlnux/references/ref.md"
+printf 'c\n' > "$AG_SRC/environments/archiso/commands/xlnux-validate.md"
+printf 'a\n' > "$AG_SRC/environments/hyprland/agents/hyprland.md"
+printf 's\n' > "$AG_SRC/environments/hyprland/skills/hyprland/SKILL.md"
+printf 'c\n' > "$AG_SRC/environments/hyprland/commands/hypr-config.md"
+
+run_agent() {
+    X_AGENT_SOURCE="$AG_SRC" X_AGENT_STATE="$AG_STATE" \
+        bash "$SRC/bin/x" agent "$@"
+}
+
+if ! run_agent install --bundle x --dest "$AG_DEST" > "$TMP/agent-install.out" 2>&1; then
+    FAIL=1
+    cat "$TMP/agent-install.out"
+fi
+check "agent bundle x installs env agents" test -f "$AG_DEST/agents/xlnux-generations.md"
+check "agent installs skill references" test -f "$AG_DEST/skills/xlnux/references/ref.md"
+check "agent installs env commands" test -f "$AG_DEST/commands/xlnux-validate.md"
+check "agent x bundle skips repo-only agents" test ! -f "$AG_DEST/agents/a.md"
+check "agent install is idempotent" run_agent install --bundle x --dest "$AG_DEST"
+AG_MANIFEST="$AG_STATE/$(printf '%s' "$AG_DEST" | tr '/ ' '__').tsv"
+check "agent manifest recorded" test -f "$AG_MANIFEST"
+AG_STATUS="$(run_agent status 2>&1 || true)"
+check "agent status reports the destination" grep -q "$AG_DEST" <<<"$AG_STATUS"
+check "agent dev bundle dry-run succeeds" \
+    run_agent install --bundle dev --dest "$TMP/opencode-dry" --dry-run
+check "agent dry-run creates nothing" test ! -e "$TMP/opencode-dry"
+check "agent remove deletes installed files" run_agent remove --dest "$AG_DEST"
+check "agent remove deleted the skill tree" test ! -e "$AG_DEST/skills/xlnux"
+check "agent remove cleared the manifest" test ! -f "$AG_MANIFEST"
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "smoke: OK"
 else
