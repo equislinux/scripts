@@ -103,10 +103,15 @@ fi
 # --- build jobs vs RAM -------------------------------------------------------
 # AUR source builds (quickshell-git/swayosd-git/...) can exceed 4 GB with one
 # job per core. Limit the jobs on low-RAM machines so the install does not get
-# OOM-killed halfway.
+# OOM-killed halfway. 8 GB guests still OOMed with one job per core, so the
+# -j2 band covers up to 10 GB.
 if [[ -r /proc/meminfo ]]; then
     MEM_MB="$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)"
-    if (( MEM_MB < 7000 )); then
+    if (( MEM_MB < 6000 )); then
+        export MAKEFLAGS="-j1"
+        export CARGO_BUILD_JOBS=1
+        log "low RAM (${MEM_MB} MB): limiting AUR build jobs to 1"
+    elif (( MEM_MB < 10000 )); then
         export MAKEFLAGS="-j2"
         export CARGO_BUILD_JOBS=2
         log "low RAM (${MEM_MB} MB): limiting AUR build jobs to 2"

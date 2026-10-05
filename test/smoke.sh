@@ -227,6 +227,15 @@ check "agent remove deletes installed files" run_agent remove --dest "$AG_DEST"
 check "agent remove deleted the skill tree" test ! -e "$AG_DEST/skills/xlnux"
 check "agent remove cleared the manifest" test ! -f "$AG_MANIFEST"
 
+# Warnings must not pollute the captured result (regression: log/warn went to
+# stdout and corrupted the source/manifest command substitutions).
+run_agent install --bundle x --env missing --dest "$TMP/opencode-missing" \
+    > "$TMP/agent-missing.out" 2>&1
+check "agent env-less install reports 0 items" \
+    grep -q "installed 0 item(s)" "$TMP/agent-missing.out"
+check "agent env-less install writes the manifest" \
+    test -f "$AG_STATE/$(printf '%s' "$TMP/opencode-missing" | tr '/ ' '__').tsv"
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "smoke: OK"
 else
