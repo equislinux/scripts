@@ -183,7 +183,7 @@ mkdir -p "$AG_SRC/agents/agents/general" "$AG_SRC/agents/senior/agents/senior-we
          "$AG_SRC/skills/skills/proj/references" "$AG_SRC/skills/senior/skills/api-design" \
          "$AG_SRC/skills/commands" \
          "$AG_SRC/environments/archiso/agents" \
-         "$AG_SRC/environments/archiso/skills/xlnux/references" \
+         "$AG_SRC/environments/archiso/skills/equislinux/references" \
          "$AG_SRC/environments/archiso/commands" \
          "$AG_SRC/environments/hyprland/agents" \
          "$AG_SRC/environments/hyprland/skills/hyprland" \
@@ -195,8 +195,8 @@ printf 'r\n' > "$AG_SRC/skills/skills/proj/references/ref.md"
 printf 's\n' > "$AG_SRC/skills/senior/skills/api-design/SKILL.md"
 printf 'c\n' > "$AG_SRC/skills/commands/foo.md"
 printf 'a\n' > "$AG_SRC/environments/archiso/agents/xlnux-generations.md"
-printf 's\n' > "$AG_SRC/environments/archiso/skills/xlnux/SKILL.md"
-printf 'r\n' > "$AG_SRC/environments/archiso/skills/xlnux/references/ref.md"
+printf 's\n' > "$AG_SRC/environments/archiso/skills/equislinux/SKILL.md"
+printf 'r\n' > "$AG_SRC/environments/archiso/skills/equislinux/references/ref.md"
 printf 'c\n' > "$AG_SRC/environments/archiso/commands/xlnux-validate.md"
 printf 'a\n' > "$AG_SRC/environments/hyprland/agents/hyprland.md"
 printf 's\n' > "$AG_SRC/environments/hyprland/skills/hyprland/SKILL.md"
@@ -212,7 +212,7 @@ if ! run_agent install --bundle x --dest "$AG_DEST" > "$TMP/agent-install.out" 2
     cat "$TMP/agent-install.out"
 fi
 check "agent bundle x installs env agents" test -f "$AG_DEST/agents/xlnux-generations.md"
-check "agent installs skill references" test -f "$AG_DEST/skills/xlnux/references/ref.md"
+check "agent installs skill references" test -f "$AG_DEST/skills/equislinux/references/ref.md"
 check "agent installs env commands" test -f "$AG_DEST/commands/xlnux-validate.md"
 check "agent x bundle skips repo-only agents" test ! -f "$AG_DEST/agents/a.md"
 check "agent install is idempotent" run_agent install --bundle x --dest "$AG_DEST"
@@ -224,7 +224,7 @@ check "agent dev bundle dry-run succeeds" \
     run_agent install --bundle dev --dest "$TMP/opencode-dry" --dry-run
 check "agent dry-run creates nothing" test ! -e "$TMP/opencode-dry"
 check "agent remove deletes installed files" run_agent remove --dest "$AG_DEST"
-check "agent remove deleted the skill tree" test ! -e "$AG_DEST/skills/xlnux"
+check "agent remove deleted the skill tree" test ! -e "$AG_DEST/skills/equislinux"
 check "agent remove cleared the manifest" test ! -f "$AG_MANIFEST"
 
 # Warnings must not pollute the captured result (regression: log/warn went to

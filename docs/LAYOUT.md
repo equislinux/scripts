@@ -46,4 +46,4 @@ see ADR-0001/ADR-0003 in `DECISIONS.md` at the workspace root).
   `bash install/system.sh`.
 - As user (finalize): `X_NODE=1 bash install/user.sh`.
 - Optional extras: `X_HW_NVIDIA=1 X_HW_QEMU=1` to force hardware modules.
-WSL lives in its dedicated repos: xlnux/wsl and xlnux/wsl-scripts.
+WSL lives in its dedicated repos: equislinux/wsl and equislinux/wsl-scripts.

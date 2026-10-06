@@ -1,8 +1,8 @@
 # x-scripts — visión general
 
 `x-scripts` es el **payload de aprovisionamiento y CLI** del sistema x. Es el
-repo `xlnux/scripts` (antes el repo `x`) y, junto con el resto de repos de la
-organización `xlnux`, implementa la iniciativa *reboot* que sustituyó el
+repo `equislinux/scripts` (antes el repo `x`) y, junto con el resto de repos de la
+organización `equislinux`, implementa la iniciativa *reboot* que sustituyó el
 instalador gráfico basado en Calamares por aprovisionamiento por scripts
 (mecánica Omarchy, implementación y branding propios). Ver ADR-0001/ADR-0002 en
 `DECISIONS.md` en la raíz del workspace (`x-lnux`).
@@ -11,10 +11,10 @@ instalador gráfico basado en Calamares por aprovisionamiento por scripts
 
 | Repo  | Rol |
 |-------|-----|
-| `xlnux/x` | La distro: perfil archiso, builds ISO/WSL y flujo de instalación. |
-| `xlnux/scripts` | **Este repo**: fases de aprovisionamiento, setup de usuario, CLI `x`, migraciones y temas, empaquetado como `x-scripts`. |
-| `xlnux/xpkg` / `xlnux/xpm` | Tooling Rust de empaquetado/gestión de paquetes. |
-| `xlnux/x-repo` | Repo de paquetes + portal. |
+| `equislinux/x` | La distro: perfil archiso, builds ISO/WSL y flujo de instalación. |
+| `equislinux/scripts` | **Este repo**: fases de aprovisionamiento, setup de usuario, CLI `x`, migraciones y temas, empaquetado como `x-scripts`. |
+| `equislinux/xpkg` / `equislinux/xpm` | Tooling Rust de empaquetado/gestión de paquetes. |
+| `equislinux/x-repo` | Repo de paquetes + portal. |
 
 La distro (`x`) consume este repo empaquetado como el paquete `x-scripts`; el
 instalador ejecuta las fases root (`x setup`) durante la instalación y la fase
@@ -79,4 +79,4 @@ etapa "distro instalable"; restos de auditoría pendientes para este repo
 incluyen `x-base.packages` sin consumidor, pulido de CLI, más cobertura de
 decisiones viven en los `ROADMAP.md`/`DECISIONS.md` de la raíz del workspace
 (`x-lnux`).
-WSL lives in its dedicated repos: xlnux/wsl and xlnux/wsl-scripts.
+WSL lives in its dedicated repos: equislinux/wsl and equislinux/wsl-scripts.

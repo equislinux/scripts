@@ -109,7 +109,7 @@ aprovisionarse offline** justo después de instalar:
 
 1. Un mantenedor ejecuta `vendor-config.sh` y construye `x-scripts` (snapshot
    embebido en el paquete).
-2. La distro (`xlnux/x`) instala `x-scripts` en el destino y corre las fases
+2. La distro (`equislinux/x`) instala `x-scripts` en el destino y corre las fases
    root durante la instalación.
 3. En el primer arranque la fase de usuario ejecuta
    `tools/hyprland-install.sh`, que encuentra
@@ -123,4 +123,4 @@ Notas / estado actual (del ROADMAP del workspace):
 - `x-base.packages` (la lista base legible por el builder) se empaqueta pero
   aún no tiene consumidor cableado en el builder de la distro.
 - El bundling de un mirror offline en la distro (instalación 100% sin red)
-  sigue siendo una mejora pendiente en `xlnux/x`.
+  sigue siendo una mejora pendiente en `equislinux/x`.

@@ -4,7 +4,7 @@ pkgver=0.1.0
 pkgrel=30
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
-url="https://github.com/xlnux/scripts"
+url="https://github.com/equislinux/scripts"
 license=('MIT')
 # base covers bash/coreutils/util-linux/pacman, listed explicitly for clarity:
 # the engine shells out to all of them, plus btrfs-progs for the generations.

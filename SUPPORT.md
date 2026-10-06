@@ -9,7 +9,7 @@
 <h2 id="get-help" align="center">Get Help</h2>
 
 <ul>
-  <li><b>Issues:</b> <a href="https://github.com/xlnux/x/issues">github.com/xlnux/x/issues</a></li>
+  <li><b>Issues:</b> <a href="https://github.com/equislinux/x/issues">github.com/equislinux/x/issues</a></li>
   <li><b>Security:</b> <a href="mailto:x@xscriptor.com">x@xscriptor.com</a> (private only)</li>
 </ul>
 

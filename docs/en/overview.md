@@ -1,8 +1,8 @@
 # x-scripts — overview
 
 `x-scripts` is the **provisioning payload and CLI** of the x system. It is the
-`xlnux/scripts` repo (formerly the `x` repo) and, together with the other
-repos of the `xlnux` organization, implements the *reboot* initiative that
+`equislinux/scripts` repo (formerly the `x` repo) and, together with the other
+repos of the `equislinux` organization, implements the *reboot* initiative that
 replaced the Calamares-based graphical installer with scripted provisioning
 (Omarchy mechanics, own implementation and branding). See ADR-0001/ADR-0002 in
 `DECISIONS.md` at the workspace root (`x-lnux`).
@@ -11,10 +11,10 @@ replaced the Calamares-based graphical installer with scripted provisioning
 
 | Repo  | Role |
 |-------|------|
-| `xlnux/x` | The distro: archiso profile, ISO/WSL builds and install flow. |
-| `xlnux/scripts` | **This repo**: provisioning phases, user setup, `x` CLI, migrations and themes, packaged as `x-scripts`. |
-| `xlnux/xpkg` / `xlnux/xpm` | Rust packaging/package-manager tooling. |
-| `xlnux/x-repo` | Package repository + portal. |
+| `equislinux/x` | The distro: archiso profile, ISO/WSL builds and install flow. |
+| `equislinux/scripts` | **This repo**: provisioning phases, user setup, `x` CLI, migrations and themes, packaged as `x-scripts`. |
+| `equislinux/xpkg` / `equislinux/xpm` | Rust packaging/package-manager tooling. |
+| `equislinux/x-repo` | Package repository + portal. |
 
 The distro (`x`) consumes this repo packaged as the `x-scripts` package; the
 installer runs the root phases (`x setup`) during install and the user phase
@@ -77,4 +77,4 @@ the "distro installable" stage; remaining audit items for this repo include
 `x-base.packages` without a consumer, CLI polish, more unit coverage for the
 helpers/phases and WSL unification. Progress and decisions live in the
 `ROADMAP.md`/`DECISIONS.md` files at the workspace root (`x-lnux`).
-WSL lives in its dedicated repos: xlnux/wsl and xlnux/wsl-scripts.
+WSL lives in its dedicated repos: equislinux/wsl and equislinux/wsl-scripts.

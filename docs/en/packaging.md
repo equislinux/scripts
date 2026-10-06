@@ -103,7 +103,7 @@ provisioned offline** right after install:
 
 1. A maintainer runs `vendor-config.sh` and builds `x-scripts` (snapshot
    embedded in the package).
-2. The distro (`xlnux/x`) installs `x-scripts` on the target and runs the root
+2. The distro (`equislinux/x`) installs `x-scripts` on the target and runs the root
    phases during install.
 3. At first boot the user phase runs `tools/hyprland-install.sh`, which finds
    `/usr/share/x/config/equisdots` and deploys the whole desktop **without any
@@ -116,4 +116,4 @@ Notes / current state (from the workspace ROADMAP):
 - `x-base.packages` (the builder-readable base list) is shipped but does not
   yet have a consumer wired into the distro builder.
 - The distro-side offline mirror bundling (fully network-less install) remains
-  a pending improvement in `xlnux/x`.
+  a pending improvement in `equislinux/x`.
