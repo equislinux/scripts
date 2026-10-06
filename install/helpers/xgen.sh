@@ -445,6 +445,13 @@ xgen_snapshot_create() {
             xgen_die "generations are not supported here (backend: $backend)"
             ;;
     esac
+
+    # Runtime locks must not be frozen into a bootable generation: the pacman
+    # hooks snapshot the tree while a transaction holds /var/lib/pacman/db.lck,
+    # and a stale lock inside the booted generation blocks every later pacman
+    # run ("unable to lock database"). The snapshot is a separate tree, so
+    # deleting it here never touches the running transaction.
+    rm -f "$snap/var/lib/pacman/db.lck"
     return 0
 }
 

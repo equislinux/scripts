@@ -40,11 +40,18 @@ printf 'initrd\n' > "$X_GEN_ROOT/boot/initramfs-linux.img"
 mkdir -p "$X_GEN_ROOT/home/user/.local/state/x/migrations"
 : > "$X_GEN_ROOT/home/user/.local/state/x/migrations/20260101000000-alpha"
 
+# A pacman transaction lock present at snapshot time must not be frozen into
+# the generation (regression: booting it blocked every later pacman run).
+mkdir -p "$X_GEN_ROOT/var/lib/pacman"
+: > "$X_GEN_ROOT/var/lib/pacman/db.lck"
+
 echo "== creation =="
 ID="$(xgen_new test first)"
 check "first generation is 0001" test "$ID" = "0001"
 check "manifest exists" test -f "$X_GEN_DIR/0001/manifest.json"
 check "snapshot exists" test -f "$X_GEN_SNAPSHOTS/0001/etc/app.conf"
+check "snapshot drops the pacman lock" test ! -e "$X_GEN_SNAPSHOTS/0001/var/lib/pacman/db.lck"
+check "live tree keeps its pacman lock" test -f "$X_GEN_ROOT/var/lib/pacman/db.lck"
 check "current points at 0001" test "$(xgen_current)" = "0001"
 check "manifest records the cmdline" grep -q 'rootflags=subvol=@' "$X_GEN_DIR/0001/manifest.json"
 check "manifest records the kernel release" grep -q '6.9.0-test' "$X_GEN_DIR/0001/manifest.json"
