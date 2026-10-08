@@ -6,7 +6,10 @@ This tree is dumped onto `/etc` during the system configuration phase
 - `sysctl.d/` — kernel parameters.
 - `tmpfiles.d/` — temporary files/permissions.
 - `sudoers.d/` — sudo rules.
-- `pacman.d/hooks/` — own pacman hooks.
+
+Pacman hooks are not overlay files: the `x-scripts` package ships them in
+`/usr/share/libalpm/hooks/` (same directory as `90-mkinitcpio-*`, so the
+post-transaction hook runs after a new kernel's initramfs exists).
 
 Rule: never overwrite package files; always use drop-ins. A file already
 modified by the administrator is not overwritten.

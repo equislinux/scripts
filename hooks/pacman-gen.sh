@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Records an x generation around pacman transactions. Installed by x-scripts
-# and referenced from /etc/pacman.d/hooks/{10-x-gen-pre,95-x-gen-post}.hook.
+# and referenced from /usr/share/libalpm/hooks/{10-x-gen-pre,95-x-gen-post}.hook.
 #
 # Usage: pacman-gen.sh pre|post
 #

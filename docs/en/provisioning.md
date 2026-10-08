@@ -79,7 +79,8 @@ and `hgen_prune`, backing the `x home` commands. `user-seed.sh` records a
 `pre-setup` capture before touching dotfiles and `x update` records a
 `pre-update` one; `X_HGEN_SKIP=1` disables both.
 
-Pacman hooks: `etc/pacman.d/hooks/{10-x-gen-pre,95-x-gen-post}.hook` call
+Pacman hooks: `hooks/alpm/{10-x-gen-pre,95-x-gen-post}.hook` (installed to
+`/usr/share/libalpm/hooks/`) call
 `hooks/pacman-gen.sh`, a no-op without a current generation, on non-btrfs, or
 with `X_GEN_SKIP=1` (which `x update` sets on its own pacman so it can manage
 its pre/post generations itself). Details in `generations.md`.

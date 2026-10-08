@@ -83,7 +83,8 @@ root ni btrfs): `hgen_new`, `hgen_list`, `hgen_status`, `hgen_diff`,
 `user-seed.sh` registra una captura `pre-setup` antes de tocar dotfiles y
 `x update` registra una `pre-update`; `X_HGEN_SKIP=1` desactiva ambas.
 
-Hooks de pacman: `etc/pacman.d/hooks/{10-x-gen-pre,95-x-gen-post}.hook` llaman
+Hooks de pacman: `hooks/alpm/{10-x-gen-pre,95-x-gen-post}.hook` (instalados en
+`/usr/share/libalpm/hooks/`) llaman
 a `hooks/pacman-gen.sh`, que es no-op sin generación actual, en no-btrfs o con
 `X_GEN_SKIP=1` (lo que `x update` setea en su propio pacman para manejar él
 mismo sus generaciones pre/post). Detalles en `generations.md`.

@@ -28,8 +28,8 @@ out of scope for packaging (see the packaging doc and the workspace ROADMAP).
   system snapshots, `xgen-home.sh` for dotfile generations).
 - `bin/` — the `x` CLI (dispatcher + subcommands by naming convention),
   including `x gen ...` and `x home ...`.
-- `hooks/` — pacman hook wrappers (`pacman-gen.sh`) referenced by the
-  `etc/pacman.d/hooks/` drop-ins.
+- `hooks/` — the `pacman-gen.sh` wrapper and the alpm hook sources
+  (`hooks/alpm/`, installed to `/usr/share/libalpm/hooks/`).
 - `skel/`, `etc/`, `config/` — dotfile seeds for `/etc/skel`, `/etc`
   drop-ins and user configs.
 - `hardware/`, `tools/` — optional modules (NVIDIA, QEMU/libvirt, node) and

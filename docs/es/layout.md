@@ -21,7 +21,7 @@ ADR-0001/ADR-0003 en `DECISIONS.md` en la raíz del workspace).
 | `install/helpers/sync.sh` | Sync idempotente de árboles: `x_copy_tree`, `x_seed_home`, `x_sync_config`. |
 | `install/x-base.packages` | Lista de paquetes base legible por el builder (uno por línea); aún sin consumidor cableado. |
 | `skel/` | Seed de `/etc/skel` para usuarios nuevos (hoy un `.bashrc`). |
-| `etc/` | Drop-ins de `/etc`, un directorio por ruta (`sysctl.d`, `tmpfiles.d`, `sudoers.d`, `pacman.d/hooks` documentados en su README); aún no se publica ningún drop-in. |
+| `etc/` | Drop-ins de `/etc`, un directorio por ruta (`sysctl.d`, `tmpfiles.d`, `sudoers.d` documentados en su README); aún no se publica ningún drop-in. |
 | `config/` | Dotfiles de usuario sincronizados a `~/.config`. `config/hypr/` es solo un punto de entrada documental + wallpaper por defecto; la config real de escritorio viaja offline en el paquete (`/usr/share/x/config/equisdots`), ADR-0005. |
 | `migrations/` | Migraciones por usuario idempotentes (`<timestamp>-<name>.sh`), aplicadas por `x migrate` / `x update`. |
 | `themes/` | Almacén de temas: `themes/<name>/colors` (key=hex), aplicado por `x theme set`. |

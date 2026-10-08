@@ -1,7 +1,7 @@
 # Maintainer: Xscriptor <dev@xscriptor.com>
 pkgname=x-scripts
 pkgver=0.1.0
-pkgrel=34
+pkgrel=35
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
 url="https://github.com/equislinux/scripts"
@@ -25,6 +25,12 @@ package() {
     for d in bin install skel etc config hardware tools migrations themes hooks; do
         [ -e "$startdir/../$d" ] && cp -a "$startdir/../$d" "$dest/"
     done
+
+    # Pacman hooks live in the package-owned system hook directory so they
+    # sort together with 90-mkinitcpio-* (the post hook must run after the
+    # initramfs of a new kernel exists).
+    install -d "$pkgdir/usr/share/libalpm/hooks"
+    install -m644 "$startdir/../hooks/alpm/"*.hook "$pkgdir/usr/share/libalpm/hooks/"
 
     # Offline desktop snapshot (equisdots stack + kitty/starship/nvim)
     # produced by vendor-config.sh. When present it is merged into

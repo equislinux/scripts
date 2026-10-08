@@ -12,9 +12,10 @@ currently out of scope for packaging; see the workspace ROADMAP, Phase 4.)
   `migrations`, `themes` and `hooks` to **`/usr/share/x`**.
 - Makes every `*.sh` (and the `x` dispatcher) executable under
   `/usr/share/x/{bin,install,hardware,tools,hooks}`.
-- The `/etc` overlay (including the pacman hooks `etc/pacman.d/hooks/`) is
-  applied by `x setup` (`install/config.sh`); `hooks/pacman-gen.sh` is the
-  wrapper those hooks call (see `provisioning.md` and `generations.md`).
+- The `/etc` overlay is applied by `x setup` (`install/config.sh`). The pacman
+  hooks ship in the package (`hooks/alpm/*.hook` →
+  `/usr/share/libalpm/hooks/`); `hooks/pacman-gen.sh` is the wrapper they call
+  (see `provisioning.md` and `generations.md`).
 - Installs `/usr/bin/x` as a symlink to `/usr/share/x/bin/x`.
 - If `packaging/.vendor/x-config` exists, its contents are merged into
   `/usr/share/x/config` (the offline desktop snapshot used by

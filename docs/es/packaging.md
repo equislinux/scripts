@@ -13,10 +13,10 @@ workspace, Fase 4.)
   `migrations`, `themes` y `hooks` en **`/usr/share/x`**.
 - Hace ejecutables todos los `*.sh` (y el dispatcher `x`) bajo
   `/usr/share/x/{bin,install,hardware,tools,hooks}`.
-- El overlay de `/etc` (incluidos los hooks de pacman
-  `etc/pacman.d/hooks/`) lo aplica `x setup` (`install/config.sh`);
-  `hooks/pacman-gen.sh` es el wrapper que llaman esos hooks (ver
-  `provisioning.md` y `generations.md`).
+- El overlay de `/etc` lo aplica `x setup` (`install/config.sh`). Los hooks de
+  pacman van en el paquete (`hooks/alpm/*.hook` →
+  `/usr/share/libalpm/hooks/`); `hooks/pacman-gen.sh` es el wrapper que llaman
+  (ver `provisioning.md` y `generations.md`).
 - Instala `/usr/bin/x` como symlink a `/usr/share/x/bin/x`.
 - Si existe `packaging/.vendor/x-config`, sus contenidos se fusionan en
   `/usr/share/x/config` (el snapshot offline del escritorio que usa

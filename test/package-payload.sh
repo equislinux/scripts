@@ -52,8 +52,8 @@ else
         usr/share/x/bin/x-gen-boot.sh \
         usr/share/x/bin/x-home-new.sh \
         usr/share/x/hooks/pacman-gen.sh \
-        usr/share/x/etc/pacman.d/hooks/10-x-gen-pre.hook \
-        usr/share/x/etc/pacman.d/hooks/95-x-gen-post.hook
+        usr/share/libalpm/hooks/10-x-gen-pre.hook \
+        usr/share/libalpm/hooks/95-x-gen-post.hook
     do
         check "payload contains $f" grep -qxF "$f" <<< "$listing"
     done

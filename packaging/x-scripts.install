@@ -1,19 +1,13 @@
-# Keeps /etc/pacman.d/hooks in sync with the packaged drop-ins, so upgrades do
-# not need a full 'x setup'. Idempotent.
+# Drops any legacy hook copies from /etc/pacman.d/hooks. The hooks themselves
+# ship in /usr/share/libalpm/hooks (package-owned) so they order alongside
+# 90-mkinitcpio-* and survive upgrades without 'x setup'.
 
-_x_sync_pacman_hooks() {
-    local src=/usr/share/x/etc/pacman.d/hooks
-    install -d /etc/pacman.d/hooks
-    if [[ -d "$src" ]]; then
-        cp -f "$src"/*.hook /etc/pacman.d/hooks/ 2>/dev/null || true
-    fi
-    rm -f /etc/pacman.d/hooks/20-x-gen-post.hook
-}
-
-post_install() { _x_sync_pacman_hooks; }
-post_upgrade() { _x_sync_pacman_hooks; }
-
-post_remove() {
+_x_remove_legacy_hooks() {
     rm -f /etc/pacman.d/hooks/10-x-gen-pre.hook \
+          /etc/pacman.d/hooks/20-x-gen-post.hook \
           /etc/pacman.d/hooks/95-x-gen-post.hook
 }
+
+post_install() { _x_remove_legacy_hooks; }
+post_upgrade() { _x_remove_legacy_hooks; }
+post_remove() { _x_remove_legacy_hooks; }

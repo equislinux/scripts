@@ -29,8 +29,8 @@ de packaging y el ROADMAP del workspace).
   (`xgen.sh` para snapshots del sistema, `xgen-home.sh` para dotfiles).
 - `bin/` — la CLI `x` (dispatcher + subcomandos por convención de nombres),
   incluidos `x gen ...` y `x home ...`.
-- `hooks/` — wrappers de hooks de pacman (`pacman-gen.sh`) referenciados por
-  los drop-ins de `etc/pacman.d/hooks/`.
+- `hooks/` — el wrapper `pacman-gen.sh` y los hooks alpm
+  (`hooks/alpm/`, instalados en `/usr/share/libalpm/hooks/`).
 - `skel/`, `etc/`, `config/` — semillas de dotfiles para `/etc/skel`, drop-ins
   de `/etc` y configs de usuario.
 - `hardware/`, `tools/` — módulos opcionales (NVIDIA, QEMU/libvirt, node) y el

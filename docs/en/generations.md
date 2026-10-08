@@ -184,8 +184,8 @@ The `x-scripts` package ships two pacman hooks:
 
 | Hook | When | Effect |
 |------|------|--------|
-| `/etc/pacman.d/hooks/10-x-gen-pre.hook` | PreTransaction | Safety generation (`reason: pacman-pre`) |
-| `/etc/pacman.d/hooks/95-x-gen-post.hook` | PostTransaction | Records the result (`reason: pacman`); runs after `90-mkinitcpio-*` so new kernels are captured with their initramfs |
+| `/usr/share/libalpm/hooks/10-x-gen-pre.hook` | PreTransaction | Safety generation (`reason: pacman-pre`) |
+| `/usr/share/libalpm/hooks/95-x-gen-post.hook` | PostTransaction | Records the result (`reason: pacman`); sorts after `90-mkinitcpio-*` so new kernels are captured with their initramfs |
 
 Both call `/usr/share/x/hooks/pacman-gen.sh`, which is a no-op when there is no
 current generation yet (installer/pacstrap), on non-btrfs systems, or when
