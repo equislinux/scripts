@@ -57,7 +57,7 @@ if command -v pacman >/dev/null 2>&1; then
         run_privileged sed -i 's#xlnux\.github\.io#equislinux.github.io#g' /etc/pacman.conf
         echo "x update: migrated the [x] repo URL to equislinux.github.io"
     fi
-    # X_GEN_SKIP=1 makes the pacman hook (etc/pacman.d/hooks/20-x-gen-post)
+    # X_GEN_SKIP=1 makes the pacman hook (etc/pacman.d/hooks/95-x-gen-post)
     # skip: x update records its own pre/post generations around the update.
     if ! run_privileged env X_GEN_SKIP=1 pacman -Syu --noconfirm; then
         xgen_warn "pacman failed; the pre-update generation was kept for recovery"

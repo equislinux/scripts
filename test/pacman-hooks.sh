@@ -56,9 +56,11 @@ check "wrapper records through the CLI" test "$(xgen_current)" = "0001"
 
 echo "== hook files =="
 check "pre hook exists" test -f "$SRC/etc/pacman.d/hooks/10-x-gen-pre.hook"
-check "post hook exists" test -f "$SRC/etc/pacman.d/hooks/20-x-gen-post.hook"
+check "post hook exists" test -f "$SRC/etc/pacman.d/hooks/95-x-gen-post.hook"
 check "pre hook runs PreTransaction" grep -q 'When = PreTransaction' "$SRC/etc/pacman.d/hooks/10-x-gen-pre.hook"
-check "post hook runs PostTransaction" grep -q 'When = PostTransaction' "$SRC/etc/pacman.d/hooks/20-x-gen-post.hook"
+check "post hook runs PostTransaction" grep -q 'When = PostTransaction' "$SRC/etc/pacman.d/hooks/95-x-gen-post.hook"
+check "post hook sorts after mkinitcpio (kernel files exist when capturing)" \
+    test "$(printf '90-mkinitcpio-install.hook\n95-x-gen-post.hook\n' | LC_ALL=C sort | tail -1)" = "95-x-gen-post.hook"
 check "hooks call the wrapper" grep -q '/usr/share/x/hooks/pacman-gen.sh pre' "$SRC/etc/pacman.d/hooks/10-x-gen-pre.hook"
 check "x update disables the hook (manages its own generations)" grep -q 'X_GEN_SKIP=1 pacman' "$SRC/bin/x-update.sh"
 check "PKGBUILD ships hooks/" grep -q 'hooks;' "$SRC/packaging/PKGBUILD"
