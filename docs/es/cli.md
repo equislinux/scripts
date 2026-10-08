@@ -53,6 +53,9 @@ Los resúmenes son las cabeceras `x:summary` de cada archivo (los muestra
 | `x gen quota init` / `status` | Habilita quotas btrfs y muestra uso / tabla de qgroups. |
 | `x gen plan` | Imprime las acciones para cumplir una declaración `system.toml`. |
 | `x gen apply` | Aplica una declaración `system.toml` (`--dry-run`); registra una generación. |
+| `x kernel list` | Lista los kernels conocidos (release, en ejecución, headers) y el estilo de entradas de arranque. |
+| `x kernel install <kernel>` | Instala un kernel oficial de Arch + headers vía pacman (`--no-headers`, `--yes`); los hooks de generaciones lo snapshotan automáticamente. |
+| `x kernel remove <kernel>` | Elimina un kernel instalado (`--yes`); rechaza el kernel en ejecución y el último; los snapshots que lo archivaron siguen arrancando vía rollback. |
 | `x home` / `x home list` | Lista las generaciones de home del usuario (dotfiles). |
 | `x home new` / `status` / `diff` / `restore` / `prune` | Ciclo de vida de las generaciones de home. Ver `generations.md`. |
 

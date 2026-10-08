@@ -175,6 +175,11 @@ if ! bash "$SRC/test/home-gens.sh"; then
     FAIL=1
 fi
 
+echo "== kernels =="
+if ! bash "$SRC/test/kernel.sh"; then
+    FAIL=1
+fi
+
 echo "== agent bundles =="
 AG_SRC="$TMP/xscriptor-ai"
 AG_DEST="$TMP/opencode"

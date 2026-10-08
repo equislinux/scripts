@@ -50,6 +50,9 @@ Summaries are the `x:summary` headers of each file (shown by `x help`).
 | `x gen quota init` / `status` | Enables btrfs quotas and shows usage / the qgroup table. |
 | `x gen plan` | Prints the actions to match a `system.toml` declaration. |
 | `x gen apply` | Applies a `system.toml` declaration (`--dry-run`); records a generation. |
+| `x kernel list` | Lists the known kernels (release, running, headers) and the boot entry style. |
+| `x kernel install <kernel>` | Installs an official Arch kernel plus matching headers through pacman (`--no-headers`, `--yes`); the generation hooks snapshot it automatically. |
+| `x kernel remove <kernel>` | Removes an installed kernel (`--yes`); refuses the running and the last kernel; snapshots that archived it stay bootable via rollback. |
 | `x home` / `x home list` | Lists the user's home generations (dotfiles). |
 | `x home new` / `status` / `diff` / `restore` / `prune` | Home-generation lifecycle. See `generations.md`. |
 

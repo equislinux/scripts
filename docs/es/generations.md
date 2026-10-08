@@ -283,6 +283,9 @@ Boot por selección en el menú (el rollback es un comando, como
   pending.
 - `test/generations-multikernel.sh` — entries por pkgbase para `linux` +
   `linux-lts`, layout archivado y fallback legacy.
+- `test/kernel.sh` — helpers de `x kernel`: validación de la lista permitida,
+  detección de running/instalados y seguridad de borrado (rechaza el kernel en
+  ejecución y el último).
 - `test/generations-system.sh` — parser de `system.toml`, acciones del plan,
   política de prune y apply en dry-run.
 - `test/pacman-hooks.sh` — guards del wrapper (sin current, `X_GEN_SKIP`),

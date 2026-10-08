@@ -268,6 +268,8 @@ retention.
   frozen kernels, ESP retention, rollback, pin/unpin, prune, pending state.
 - `test/generations-multikernel.sh` — per-pkgbase entries for `linux` +
   `linux-lts`, archived kernel layout and legacy fallback.
+- `test/kernel.sh` — `x kernel` helpers: whitelist validation, running/installed
+  detection and removal safety (running and last kernel refused).
 - `test/generations-system.sh` — `system.toml` parser, plan actions, prune
   policy and dry-run apply.
 - `test/pacman-hooks.sh` — wrapper guards (no current, `X_GEN_SKIP`), reasons
