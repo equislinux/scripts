@@ -56,7 +56,7 @@ todas las generaciones (los snapshots no los capturan). El manifiesto hashea
 | `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Elimina generaciones viejas (pinned, running y default siempre quedan) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restaura un archivo o directorio desde un snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restaura todos los archivos de un paquete (db pacman/xpm del snapshot) |
-| `x gen export <id> [--out FILE] [--with-data] [--sign]` | Empaqueta (y opcionalmente firma) una generación como bundle portable |
+| `x gen export <id> [--out FILE] [--with-data] [--sign] [--encrypt | --encrypt-to KEY]` | Empaqueta (opcionalmente firmada/cifrada) una generación como bundle portable |
 | `x gen import <file> [--force] [--allow-metadata-only]` | Importa un bundle a `$X_GEN_STATE` (`--force` reemplaza) |
 | `x gen quota init [--limit SIZE]` / `status` | Habilita quotas btrfs y muestra uso / tabla de qgroups |
 | `x gen plan <system.toml>` | Imprime las acciones para cumplir la declaración declarativa |
@@ -143,7 +143,13 @@ capturas, migraciones, kernel archivado) como `tar.zst` (o `tar.gz` sin zstd).
 archivo) y `x gen import` lo verifica, abortando si no coincide; los bundles
 sin manifiesto (formato viejo) importan con un warning. `--sign` agrega una
 firma gpg separada (`<bundle>.sig`) con `X_GEN_SIGN_KEY`; el import la verifica
-si está presente y avisa si falta. El import es estricto con los datos: si el
+si está presente y avisa si falta. `--encrypt` genera un bundle simétrico
+AES256 (passphrase por pinentry, o `X_GEN_PASSPHRASE` para automatización) y
+`--encrypt-to KEY` (repetible) cifra a una clave gpg; combinado con `--sign`
+la firma queda embebida (sign-then-encrypt). `x gen import` detecta bundles
+cifrados por su stream OpenPGP (independiente de la extensión), descifra a un
+temporal 0600 que borra justo tras extraer, y aborta ante passphrase
+incorrecta o ciphertext manipulado antes de tocar el estado. El import es estricto con los datos: si el
 bundle trae un snapshot btrfs que no se puede importar (backend distinto, falla
 de receive) aborta antes de tocar el estado salvo `--allow-metadata-only`. Al
 restaurar un stream `btrfs send` se bifurca el subvolumen recibido para que la
@@ -215,6 +221,7 @@ capturada.
 | `X_GEN_KEEP` | `5` | Generaciones retenidas por `x gen prune` (mismas reglas: pinned/running/default) |
 | `X_GEN_QGROUP` | — | Límite de tamaño exclusivo para `x gen quota init` (p.ej. `50G`) |
 | `X_GEN_SIGN_KEY` | — | Id de clave gpg usada por `x gen export --sign` |
+| `X_GEN_PASSPHRASE` | — | Passphrase para export/import cifrados (automatización; en interactivo se usa pinentry) |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` de la generación viva (instalador: `/@`) |
 | `X_GEN_RUNNING` | del cmdline | Id de la generación running (tests) |
 | `X_GEN_SKIP` | `0` | `1` desactiva las generaciones automáticas en los hooks |
@@ -291,7 +298,8 @@ Boot por selección en el menú (el rollback es un comando, como
 - `test/pacman-hooks.sh` — guards del wrapper (sin current, `X_GEN_SKIP`),
   reasons y archivos de hook instalados.
 - `test/generations-export.sh` — round-trip export/import (metadata y datos),
-  duplicados y restore desde una generación importada.
+  duplicados, restore desde una generación importada y bundles cifrados
+  (simétrico, destinatario, sign+encrypt, rechazo de manipulación).
 - `test/home-gens.sh` — generaciones de home: captura, exclusiones, drift,
   diff, restore, rechazo de escape de rutas, prune y despacho por CLI.
 - `test/generations-btrfs.sh` — btrfs real con loop: `sudo bash

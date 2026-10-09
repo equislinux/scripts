@@ -46,7 +46,7 @@ Summaries are the `x:summary` headers of each file (shown by `x help`).
 | `x gen prune` | Removes old generations, keeping pinned/running/default (`--keep N`, `--older-than DAYS`, `--dry-run`). |
 | `x gen restore <path>` | Restores a file/directory from a generation (`--from ID`, `--dest PATH`). |
 | `x gen restore --pkg <name>` | Restores every file owned by a package. |
-| `x gen export` / `x gen import` | Packs/restores a generation bundle (`--with-data`, `--force`). |
+| `x gen export` / `x gen import` | Packs/restores a generation bundle (`--with-data`, `--sign`, `--encrypt`, `--encrypt-to KEY`, `--force`). |
 | `x gen quota init` / `status` | Enables btrfs quotas and shows usage / the qgroup table. |
 | `x gen plan` | Prints the actions to match a `system.toml` declaration. |
 | `x gen apply` | Applies a `system.toml` declaration (`--dry-run`); records a generation. |

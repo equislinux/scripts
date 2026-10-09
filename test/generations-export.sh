@@ -135,6 +135,72 @@ else
     check "--sign without a key fails" true
 fi
 
+echo "== encryption =="
+if command -v gpg >/dev/null 2>&1; then
+    export GNUPGHOME="$TMP/gnupg"
+    mkdir -m 700 -p "$GNUPGHOME"
+    gpg --batch --pinentry-mode loopback --passphrase '' \
+        --quick-generate-key "x test <x@test.invalid>" default default never >/dev/null 2>&1
+    TEST_KEY="$(gpg --batch --with-colons --list-keys x@test.invalid 2>/dev/null | awk -F: '/^fpr:/{print $10; exit}')"
+    check "test gpg key generated" test -n "$TEST_KEY"
+
+    import_into() {
+        local dir="$1" bundle="$2" pass="${3:-}"
+        mkdir -p "$dir"
+        if [[ -n "$pass" ]]; then
+            env X_GEN_BACKEND=dir X_GEN_BOOT=off X_GEN_CMDLINE="$X_GEN_CMDLINE" X_GEN_PASSPHRASE="$pass" \
+                X_GEN_ROOT="$dir/root" X_GEN_STATE="$dir/state" X_GEN_DIR="$dir/state/generations" \
+                X_GEN_CURRENT="$dir/state/current" X_GEN_SNAPSHOTS="$dir/snapshots" \
+                bash "$SRC/bin/x-gen-import.sh" "$bundle" >/dev/null 2>&1
+        else
+            env X_GEN_BACKEND=dir X_GEN_BOOT=off X_GEN_CMDLINE="$X_GEN_CMDLINE" \
+                X_GEN_ROOT="$dir/root" X_GEN_STATE="$dir/state" X_GEN_DIR="$dir/state/generations" \
+                X_GEN_CURRENT="$dir/state/current" X_GEN_SNAPSHOTS="$dir/snapshots" \
+                bash "$SRC/bin/x-gen-import.sh" "$bundle" >/dev/null 2>&1
+        fi
+    }
+
+    X_GEN_PASSPHRASE=s3cret xgen_export 0001 "$TMP/enc.tar.zst.gpg" 0 0 sym >/dev/null
+    check "symmetric bundle written" test -f "$TMP/enc.tar.zst.gpg"
+    check "bundle is an OpenPGP stream" xgen_is_gpg_file "$TMP/enc.tar.zst.gpg"
+    check "no plaintext bundle beside it" test ! -e "$TMP/enc.tar.zst"
+
+    check "symmetric round-trip imports" import_into "$TMP/f" "$TMP/enc.tar.zst.gpg" s3cret
+    check "symmetric import lands the manifest" test -f "$TMP/f/state/generations/0001/manifest.json"
+
+    if import_into "$TMP/g" "$TMP/enc.tar.zst.gpg" wrong >/dev/null 2>&1; then
+        check "wrong passphrase is rejected" false
+    else
+        check "wrong passphrase is rejected" true
+    fi
+    check "failed decrypt leaves no generation" test ! -e "$TMP/g/state/generations/0001"
+
+    cp "$TMP/enc.tar.zst.gpg" "$TMP/renamed.bin"
+    check "renamed encrypted bundle detected by magic" import_into "$TMP/h" "$TMP/renamed.bin" s3cret
+    check "renamed bundle imports" test -f "$TMP/h/state/generations/0001/manifest.json"
+
+    xgen_export 0001 "$TMP/recip.tar.zst.gpg" 0 0 recip "$TEST_KEY" >/dev/null
+    check "recipient bundle written" test -f "$TMP/recip.tar.zst.gpg"
+    check "recipient round-trip imports" import_into "$TMP/i" "$TMP/recip.tar.zst.gpg"
+    check "recipient import lands the manifest" test -f "$TMP/i/state/generations/0001/manifest.json"
+
+    X_GEN_SIGN_KEY="$TEST_KEY" xgen_export 0001 "$TMP/signed.tar.zst.gpg" 0 1 recip "$TEST_KEY" >/dev/null
+    check "sign+encrypt bundle written" test -f "$TMP/signed.tar.zst.gpg"
+    check "sign+encrypt round-trip imports" import_into "$TMP/j" "$TMP/signed.tar.zst.gpg"
+    check "sign+encrypt import lands the manifest" test -f "$TMP/j/state/generations/0001/manifest.json"
+
+    cp "$TMP/enc.tar.zst.gpg" "$TMP/tampered.gpg"
+    sz="$(stat -c %s "$TMP/tampered.gpg")"
+    printf '\xff' | dd of="$TMP/tampered.gpg" bs=1 seek=$((sz - 1)) conv=notrunc status=none
+    if import_into "$TMP/k" "$TMP/tampered.gpg" s3cret >/dev/null 2>&1; then
+        check "tampered ciphertext is rejected" false
+    else
+        check "tampered ciphertext is rejected" true
+    fi
+else
+    echo "gpg not available; skipping encryption tests"
+fi
+
 if [[ "$FAIL" -eq 0 ]]; then
     echo "generations-export: OK"
 else

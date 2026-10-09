@@ -55,7 +55,7 @@ generation (it is not captured by the snapshots). The manifest hashes `/etc`
 | `x gen prune [--keep N] [--older-than DAYS] [--dry-run]` | Removes old generations (pinned, running and default always stay) |
 | `x gen restore <path> [--from ID] [--dest PATH]` | Restores a file or directory from a snapshot |
 | `x gen restore --pkg <name> [--from ID] [--dest ROOT]` | Restores every file owned by a package (pacman/xpm db inside the snapshot) |
-| `x gen export <id> [--out FILE] [--with-data] [--sign]` | Packs (and optionally signs) a generation into a portable bundle |
+| `x gen export <id> [--out FILE] [--with-data] [--sign] [--encrypt | --encrypt-to KEY]` | Packs (optionally signed/encrypted) a generation into a portable bundle |
 | `x gen import <file> [--force] [--allow-metadata-only]` | Imports a bundle into `$X_GEN_STATE` (`--force` replaces) |
 
 ```bash
@@ -139,7 +139,13 @@ copy with the `dir` backend. Bundles carry `BUNDLE.sha256` (hash of every
 file) and `x gen import` verifies it, aborting on mismatch; bundles without
 the manifest (older format) import with a warning. `--sign` adds a detached
 gpg signature (`<bundle>.sig`) with `X_GEN_SIGN_KEY`; import verifies it when
-present and warns when missing. Import is strict about data: if the bundle
+present and warns when missing. `--encrypt` produces a symmetric AES256
+bundle (passphrase via pinentry, or `X_GEN_PASSPHRASE` for automation) and
+`--encrypt-to KEY` (repeatable) encrypts to a gpg key; combined with
+`--sign` the signature becomes embedded (sign-then-encrypt). `x gen import`
+detects encrypted bundles by their OpenPGP stream (extension-independent),
+decrypts to a 0600 temp file that is removed right after extraction, and
+aborts on a wrong passphrase or tampered ciphertext before touching the state. Import is strict about data: if the bundle
 carries a btrfs snapshot that cannot be imported (wrong backend, receive
 failure) it aborts before touching the state unless
 `--allow-metadata-only` is given. Restoring a `btrfs send` stream forks the
@@ -211,6 +217,7 @@ outside `x update`" gap: any manual pacman transaction is captured.
 | `X_GEN_KEEP` | `5` | Generations kept by `x gen prune` (same rules: pinned/running/default) |
 | `X_GEN_QGROUP` | — | Exclusive size limit for `x gen quota init` (e.g. `50G`) |
 | `X_GEN_SIGN_KEY` | — | gpg key id used by `x gen export --sign` |
+| `X_GEN_PASSPHRASE` | — | passphrase for encrypted export/import (automation; interactive runs use pinentry) |
 | `X_GEN_LIVE_SUBVOL` | — | `root_subvol` for the live generation (installer: `/@`) |
 | `X_GEN_RUNNING` | from cmdline | Running generation id (tests) |
 | `X_GEN_SKIP` | `0` | `1` disables automatic generations in hooks |
@@ -275,7 +282,8 @@ retention.
 - `test/pacman-hooks.sh` — wrapper guards (no current, `X_GEN_SKIP`), reasons
   and shipped hook files.
 - `test/generations-export.sh` — export/import round-trip (metadata and data),
-  duplicate handling and restore from an imported generation.
+  duplicate handling, restore from an imported generation, and encrypted
+  bundles (symmetric, recipient, sign+encrypt, tamper rejection).
 - `test/home-gens.sh` — home generations: capture, exclusions, drift, diff,
   restore, path-escape rejection, prune and CLI dispatch.
 - `test/generations-btrfs.sh` — real loop-mounted btrfs: `sudo bash

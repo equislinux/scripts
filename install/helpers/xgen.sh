@@ -1340,10 +1340,65 @@ xgen_quota_status() {
 # Packs a generation into a portable bundle (metadata always; snapshot data
 # with --with-data). The archive is tar.zst when zstd is available, tar.gz
 # otherwise.
+xgen_gpg_available() { command -v gpg >/dev/null 2>&1; }
+
+# Detects an OpenPGP packet stream by the first byte (0x80-0xCF).
+xgen_is_gpg_file() {
+    local b
+    [[ -f "$1" ]] || return 1
+    b="$(od -An -tu1 -N1 "$1" 2>/dev/null | tr -d ' ')"
+    [[ -n "$b" ]] || return 1
+    (( b >= 128 && b <= 207 ))
+}
+
+# Compression of a file by magic bytes: zst, gz or tar.
+xgen_compression_of() {
+    local magic
+    magic="$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')"
+    case "$magic" in
+        28b52ffd*) printf 'zst\n' ;;
+        1f8b*)     printf 'gz\n' ;;
+        *)         printf 'tar\n' ;;
+    esac
+}
+
+# gpg wrapper: uses X_GEN_PASSPHRASE through a file descriptor (never argv)
+# when set; otherwise gpg falls back to its agent/pinentry.
+xgen_gpg_run() {
+    if [[ -n "${X_GEN_PASSPHRASE:-}" ]]; then
+        gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 "$@" 3<<<"$X_GEN_PASSPHRASE"
+    else
+        gpg --yes "$@"
+    fi
+}
+
 xgen_export() {
-    local id="$1" out="${2:-}" with_data="${3:-0}" sign="${4:-0}"
-    [[ -n "$id" ]] || xgen_die "usage: x gen export <id> [--out FILE] [--with-data]"
+    local id="$1" out="${2:-}" with_data="${3:-0}" sign="${4:-0}" enc="${5:-none}"
+    local n=$(( $# < 5 ? $# : 5 ))
+    shift "$n"
+    local -a recipients=("$@")
+    [[ -n "$id" ]] || xgen_die "usage: x gen export <id> [--out FILE] [--with-data] [--sign] [--encrypt|--encrypt-to KEY]"
     [[ -f "$(xgen_manifest_path "$id")" ]] || xgen_die "generation $id not found"
+    case "$enc" in
+        none|sym|recip) ;;
+        *) xgen_die "invalid encryption mode '$enc'" ;;
+    esac
+    if [[ "$enc" == "sym" && "${#recipients[@]}" -gt 0 ]]; then
+        xgen_die "--encrypt and --encrypt-to are mutually exclusive"
+    fi
+    if [[ "$enc" == "recip" && "${#recipients[@]}" -eq 0 ]]; then
+        xgen_die "--encrypt-to needs at least one key"
+    fi
+    if [[ "$enc" != "none" ]] && ! xgen_gpg_available; then
+        xgen_die "gpg is required to encrypt the bundle"
+    fi
+    if [[ "$sign" == "1" && "$enc" != "none" && -z "${X_GEN_SIGN_KEY:-}" ]]; then
+        xgen_die "X_GEN_SIGN_KEY is not set (required for --sign)"
+    fi
+
+    local old_umask
+    old_umask="$(umask)"
+    umask 077
     xgen_check_state_readable
 
     local tmpdir
@@ -1388,35 +1443,74 @@ xgen_export() {
     (cd "$tmpdir" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum) > "$sums"
     mv "$sums" "$tmpdir/BUNDLE.sha256"
 
+    local use_zstd=0
+    if command -v zstd >/dev/null 2>&1; then
+        if [[ -z "$out" || "$out" == *.tar.zst || "$out" == *.tar.zst.gpg ]]; then
+            use_zstd=1
+        fi
+    fi
+
     if [[ -z "$out" ]]; then
         local stamp
         stamp="$(date -u +%Y%m%d)"
-        if command -v zstd >/dev/null 2>&1; then
+        if [[ "$use_zstd" -eq 1 ]]; then
             out="x-gen-$id-$stamp.tar.zst"
         else
             out="x-gen-$id-$stamp.tar.gz"
         fi
     fi
-
-    if command -v zstd >/dev/null 2>&1 && [[ "$out" == *.tar.zst ]]; then
-        tar -C "$tmpdir" -cf - . | zstd -q -3 -o "$out" || { rm -rf "$tmpdir"; xgen_die "export failed"; }
-    else
-        tar -czf "$out" -C "$tmpdir" . || { rm -rf "$tmpdir"; xgen_die "export failed"; }
+    if [[ "$enc" != "none" && "$out" != *.gpg ]]; then
+        out="$out.gpg"
     fi
 
-    if [[ "$sign" == "1" ]]; then
+    if [[ "$enc" == "none" ]]; then
+        if [[ "$use_zstd" -eq 1 ]]; then
+            tar -C "$tmpdir" -cf - . | zstd -q -3 -o "$out" || { rm -rf "$tmpdir"; xgen_die "export failed"; }
+        else
+            tar -czf "$out" -C "$tmpdir" . || { rm -rf "$tmpdir"; xgen_die "export failed"; }
+        fi
+    else
+        local -a gopts=(--cipher-algo AES256)
+        if [[ "$enc" == "sym" ]]; then
+            gopts+=(--symmetric)
+        else
+            local r
+            for r in "${recipients[@]}"; do
+                gopts+=(--recipient "$r")
+            done
+            gopts+=(--encrypt --trust-model always)
+        fi
+        if [[ "$sign" == "1" ]]; then
+            gopts+=(--sign --local-user "$X_GEN_SIGN_KEY")
+        fi
+        if [[ "$use_zstd" -eq 1 ]]; then
+            tar -C "$tmpdir" -cf - . | zstd -q -3 | xgen_gpg_run "${gopts[@]}" --output "$out" \
+                || { rm -rf "$tmpdir"; xgen_die "encrypted export failed"; }
+        else
+            tar -C "$tmpdir" -czf - . | xgen_gpg_run "${gopts[@]}" --output "$out" \
+                || { rm -rf "$tmpdir"; xgen_die "encrypted export failed"; }
+        fi
+        case "$enc" in
+            sym)   xgen_log "encrypted bundle (symmetric, AES256): $out" ;;
+            recip) xgen_log "encrypted bundle (recipients: ${recipients[*]}): $out" ;;
+        esac
+        [[ "$sign" == "1" ]] && xgen_log "embedded signature by $X_GEN_SIGN_KEY"
+    fi
+
+    if [[ "$sign" == "1" && "$enc" == "none" ]]; then
         local key="${X_GEN_SIGN_KEY:-}"
         if [[ -z "$key" ]]; then
             rm -rf "$tmpdir"
             xgen_die "X_GEN_SIGN_KEY is not set (required for --sign)"
         fi
-        command -v gpg >/dev/null 2>&1 || { rm -rf "$tmpdir"; xgen_die "gpg is required for --sign"; }
+        xgen_gpg_available || { rm -rf "$tmpdir"; xgen_die "gpg is required for --sign"; }
         gpg --batch --yes --local-user "$key" --detach-sign --output "$out.sig" "$out" \
             || { rm -rf "$tmpdir"; xgen_die "failed to sign $out"; }
         xgen_log "signed bundle: $out.sig"
     fi
 
     rm -rf "$tmpdir"
+    umask "$old_umask"
     xgen_log "generation $id exported to $out"
 }
 
@@ -1427,24 +1521,41 @@ xgen_import() {
     [[ -f "$file" ]] || xgen_die "bundle not found: $file"
     xgen_check_state_readable
 
-    local tmpdir
+    local tmpdir work="$file" decrypted=0
     tmpdir="$(mktemp -d)"
-    case "$file" in
-        *.tar.zst)
-            command -v zstd >/dev/null 2>&1 || { rm -rf "$tmpdir"; xgen_die "zstd is required for $file"; }
-            zstd -q -dc "$file" | tar -C "$tmpdir" -xf - || { rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
+
+    if xgen_is_gpg_file "$file"; then
+        xgen_gpg_available || { rm -rf "$tmpdir"; xgen_die "gpg is required to decrypt $file"; }
+        work="$(mktemp)"
+        decrypted=1
+        if ! xgen_gpg_run --decrypt --output "$work" "$file"; then
+            rm -f "$work"
+            rm -rf "$tmpdir"
+            xgen_die "failed to decrypt $file (wrong passphrase/key or corrupt)"
+        fi
+        xgen_log "bundle decrypted"
+    fi
+
+    case "$(xgen_compression_of "$work")" in
+        zst)
+            command -v zstd >/dev/null 2>&1 || { rm -f "$work"; rm -rf "$tmpdir"; xgen_die "zstd is required for $file"; }
+            zstd -q -dc "$work" | tar -C "$tmpdir" -xf - || { rm -f "$work"; rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
             ;;
-        *.tar.gz|*.tgz)
-            tar -xzf "$file" -C "$tmpdir" || { rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
+        gz)
+            tar -xzf "$work" -C "$tmpdir" || { rm -f "$work"; rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
             ;;
-        *.tar)
-            tar -xf "$file" -C "$tmpdir" || { rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
+        tar)
+            tar -xf "$work" -C "$tmpdir" || { rm -f "$work"; rm -rf "$tmpdir"; xgen_die "cannot extract $file"; }
             ;;
         *)
+            rm -f "$work"
             rm -rf "$tmpdir"
-            xgen_die "unknown bundle format: $file (expected .tar.zst, .tar.gz or .tar)"
+            xgen_die "unknown bundle format: $file (expected tar.zst, tar.gz, tar or a gpg-encrypted bundle)"
             ;;
     esac
+    if [[ "$decrypted" == "1" ]]; then
+        rm -f "$work"
+    fi
 
     if [[ -f "$tmpdir/BUNDLE.sha256" ]]; then
         if ! (cd "$tmpdir" && sha256sum -c --quiet BUNDLE.sha256 >/dev/null 2>&1); then
@@ -1460,6 +1571,8 @@ xgen_import() {
             rm -rf "$tmpdir"
             xgen_die "bundle signature verification failed: $file (import the publisher key first)"
         fi
+    elif [[ "$decrypted" == "1" ]]; then
+        xgen_log "encrypted bundle (gpg verifies embedded signatures when the signer key is present)"
     else
         xgen_warn "bundle is not signed ($file.sig missing)"
     fi

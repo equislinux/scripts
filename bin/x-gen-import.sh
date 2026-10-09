@@ -19,6 +19,9 @@ while [[ $# -gt 0 ]]; do
             echo "usage: x gen import <file> [--force] [--allow-metadata-only]"
             echo "  --force                  replace the generation if it already exists"
             echo "  --allow-metadata-only    keep the metadata if the btrfs snapshot cannot be imported"
+            echo
+            echo "gpg-encrypted bundles (.gpg, detected by magic) are decrypted automatically."
+            echo "The passphrase comes from pinentry, or X_GEN_PASSPHRASE for automation."
             exit 0
             ;;
         -*)

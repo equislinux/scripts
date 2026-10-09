@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# x:summary=Exports a generation as a portable bundle
-# x:args=<id> [--out FILE] [--with-data]
+# x:summary=Exports a generation as a portable signed/encrypted bundle
+# x:args=<id> [--out FILE] [--with-data] [--sign] [--encrypt | --encrypt-to KEY]
 # x:root=false
 set -euo pipefail
 
@@ -11,17 +11,41 @@ ID=""
 OUT=""
 DATA=0
 SIGN=0
+ENC="none"
+RECIPIENTS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --out) OUT="${2:?--out needs a path}"; shift 2 ;;
         --with-data) DATA=1; shift ;;
         --sign) SIGN=1; shift ;;
+        --encrypt)
+            if [[ "$ENC" == "recip" ]]; then
+                echo "x gen export: --encrypt and --encrypt-to are mutually exclusive" >&2
+                exit 1
+            fi
+            ENC="sym"
+            shift
+            ;;
+        --encrypt-to)
+            if [[ "$ENC" == "sym" ]]; then
+                echo "x gen export: --encrypt and --encrypt-to are mutually exclusive" >&2
+                exit 1
+            fi
+            RECIPIENTS+=("${2:?--encrypt-to needs a key}")
+            ENC="recip"
+            shift 2
+            ;;
         -h|--help)
             echo "usage: x gen export <id> [--out FILE] [--with-data] [--sign]"
-            echo "  --out FILE      output bundle (default: x-gen-<id>-<date>.tar.zst)"
-            echo "  --with-data     include the snapshot (btrfs send / tree copy; root on btrfs)"
-            echo "  --sign          sign the bundle with X_GEN_SIGN_KEY (gpg detached .sig)"
+            echo "                      [--encrypt | --encrypt-to KEY]..."
+            echo "  --out FILE        output bundle (default: x-gen-<id>-<date>.tar.zst[.gpg])"
+            echo "  --with-data       include the snapshot (btrfs send / tree copy; root on btrfs)"
+            echo "  --sign            sign with X_GEN_SIGN_KEY (detached .sig; embedded when encrypting)"
+            echo "  --encrypt         symmetric AES256; passphrase via pinentry, or X_GEN_PASSPHRASE"
+            echo "                    (automation only; never passed through argv)"
+            echo "  --encrypt-to KEY  encrypt to a gpg key (repeatable). Signing becomes embedded"
+            echo "                    (sign-then-encrypt), verified on import when the key is present."
             exit 0
             ;;
         -*)
@@ -39,5 +63,5 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "$ID" ]] || { echo "usage: x gen export <id> [--out FILE] [--with-data] [--sign]" >&2; exit 1; }
-xgen_export "$ID" "$OUT" "$DATA" "$SIGN"
+[[ -n "$ID" ]] || { echo "usage: x gen export <id> [--out FILE] [--with-data] [--sign] [--encrypt | --encrypt-to KEY]" >&2; exit 1; }
+xgen_export "$ID" "$OUT" "$DATA" "$SIGN" "$ENC" "${RECIPIENTS[@]}"

@@ -1,7 +1,7 @@
 # Maintainer: Xscriptor <dev@xscriptor.com>
 pkgname=x-scripts
 pkgver=0.1.0
-pkgrel=35
+pkgrel=36
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
 url="https://github.com/equislinux/scripts"
@@ -11,7 +11,7 @@ install=x-scripts.install
 # the engine shells out to all of them, plus btrfs-progs for the generations.
 depends=('bash' 'btrfs-progs' 'coreutils' 'util-linux' 'pacman')
 optdepends=(
-    'gnupg: signed generation export/import (--sign)'
+    'gnupg: signed and encrypted generation export/import (--sign, --encrypt)'
     'zstd: zstd-compressed export bundles (falls back to gzip)'
     'git: fetch desktop/theming sources (x theme, x setup)'
 )
