@@ -25,6 +25,7 @@ bash bin/x setup --user     # current user
 bash bin/x theme set x-dark
 bash bin/x migrate
 bash bin/x update
+bash bin/x kernel list        # kernels: list/install/remove (safety guards)
 
 # Direct per phase (equivalent)
 sudo bash install/system.sh
