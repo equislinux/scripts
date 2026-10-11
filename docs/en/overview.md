@@ -1,11 +1,9 @@
 # x-scripts — overview
 
-`x-scripts` is the **provisioning payload and CLI** of the x system. It is the
-`equislinux/scripts` repo (formerly the `x` repo) and, together with the other
-repos of the `equislinux` organization, implements the *reboot* initiative that
-replaced the Calamares-based graphical installer with scripted provisioning
-(Omarchy mechanics, own implementation and branding). See ADR-0001/ADR-0002 in
-`DECISIONS.md` at the workspace root (`x-lnux`).
+`x-scripts` is the **provisioning payload and CLI** of the X system. It is the
+`equislinux/scripts` repo (formerly the `x` repo); it replaced the
+Calamares-based graphical installer with scripted provisioning, with its own
+implementation and branding.
 
 ## Role in the organization
 
@@ -18,8 +16,9 @@ replaced the Calamares-based graphical installer with scripted provisioning
 
 The distro (`x`) consumes this repo packaged as the `x-scripts` package; the
 installer runs the root phases (`x setup`) during install and the user phase
-(`x setup --user`) at first boot. The Rust tooling (`xpkg`/`xpm`) is currently
-out of scope for packaging (see the packaging doc and the workspace ROADMAP).
+(`x setup --user`) at first boot. The Rust tooling (`xpkg`/`xpm`) builds and
+drives the native `.xp` endpoint; the system itself is provisioned with
+pacman + `[x]`.
 
 ## What this repo provides
 
@@ -68,13 +67,11 @@ app configs come from `xscriptor-colors/terminal` (kitty/starship) and
 `equisdots/dots`. A snapshot of the whole stack is vendored into the package
 for offline use. See `hyprland.md` and ADR-0005.
 
-## Branch and status
+## Status
 
-The *reboot* deliverables of this repo are tracked on **`main`** (current
-branch; a local `x/reboot` also exists for reference). The phase tracking in
-`ROADMAP.md` of this repo and of the workspace root is mostly complete through
-the "distro installable" stage; remaining audit items for this repo include
-`x-base.packages` without a consumer, CLI polish, more unit coverage for the
-helpers/phases and WSL unification. Progress and decisions live in the
-`ROADMAP.md`/`DECISIONS.md` files at the workspace root (`x-lnux`).
+This repo's deliverables are tracked on **`main`**; the payload is published as
+`x-scripts` (0.1.0-36) in the `[x]` repository and reaches installed systems
+with `x update`. Remaining audit items: `x-base.packages` without a consumer,
+CLI polish and more coverage for the helpers/phases.
+
 WSL lives in its dedicated repos: equislinux/wsl and equislinux/wsl-scripts.
