@@ -1,7 +1,7 @@
 # scripts — ROADMAP
 
-Payload de aprovisionamiento + CLI `x`. La planificacion principal vive en el
-`ROADMAP.md` de la raiz del workspace (x-lnux).
+Payload de aprovisionamiento + CLI `x`. La planificación principal vive en este
+repositorio; el detalle por área está en `docs/`.
 
 ## Hecho
 
@@ -16,10 +16,10 @@ Payload de aprovisionamiento + CLI `x`. La planificacion principal vive en el
   import), hooks de pacman pre/post, generaciones de home (`x home`) y docs
   en/es (ver `docs/en/generations.md`).
 
-## Pendiente (auditoria)
+## Pendiente (auditoría)
 
-- Clobber de `config.sh` (semantica de backup), LICENSE y deps del PKGBUILD,
-  alias+subargs del CLI, unificacion de `wsl/`.
+- Clobber de `config.sh` (semántica de backup) y reauditoría de deps del
+  PKGBUILD, alias + subargs del CLI.
 
 ## Sincronizacion
 
