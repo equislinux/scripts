@@ -131,8 +131,9 @@ posible si estaba unpinned), limpia el marcador.
   crea la generación `0001` (`reason: install`, subvol vivo `/@`) después del
   bootloader, con `X_GEN_LIVE_SUBVOL=/@`.
 
-`x gen new` registra estado; no cambia el default boot (para eso está
-`x gen rollback`).
+`x gen new` registra estado y fija la generación nueva como default boot (gana
+la más reciente en el próximo arranque). `x gen rollback <id>` sigue pudiendo
+sobreescribirlo hasta que se cree una generación nueva.
 
 ## Export e import
 

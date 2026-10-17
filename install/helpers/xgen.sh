@@ -739,6 +739,19 @@ menuentry \"$title\" --id x-gen-$id$suffix {
         fi
     done
 
+    # Live generations have no archived-kernel dir under x/gen-*, so their
+    # entries are not covered by the loop above: sweep entry files too.
+    local e2 id2
+    for e2 in "$sb_dir"/x-gen-*.conf; do
+        [[ -e "$e2" ]] || continue
+        id2="${e2##*/x-gen-}"
+        id2="${id2%.conf}"
+        id2="${id2%%-*}"
+        if [[ -z "${keep[$id2]:-}" ]]; then
+            rm -f "$e2"
+        fi
+    done
+
     if [[ "$have_sb" -eq 1 && -n "$def" ]]; then
         if [[ -f "$bootdir/loader/loader.conf" ]]; then
             sed -i "s|^default .*|default x-gen-$def.conf|" "$bootdir/loader/loader.conf"
@@ -814,9 +827,10 @@ xgen_new() {
     if [[ -d "$snap_etc" ]]; then
         xgen_manifest_set_hash "$id" "$(xgen_hash_tree "$snap_etc" 2>/dev/null || true)"
     fi
-    if [[ -z "$oldcur" ]]; then
-        xgen_current_set "$id"
-    fi
+    # Newest wins: a freshly created generation becomes the default boot target
+    # (NixOS-style). `x gen rollback` still overrides this until the next
+    # generation is created.
+    xgen_current_set "$id"
     running="$(xgen_running_id)"
     if [[ -z "$running" && -z "$oldcur" ]]; then
         export X_GEN_RUNNING="$id"

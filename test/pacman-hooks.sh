@@ -52,7 +52,7 @@ X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" post
 check "post records a pacman generation" grep -q '"reason": "pacman"' "$X_GEN_DIR/0002/manifest.json"
 X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" pre
 check "pre records a safety generation" grep -q '"reason": "pacman-pre"' "$X_GEN_DIR/0003/manifest.json"
-check "wrapper records through the CLI" test "$(xgen_current)" = "0001"
+check "wrapper records through the CLI" test "$(xgen_current)" = "0003"
 
 echo "== hook files =="
 check "pre hook exists" test -f "$SRC/hooks/alpm/10-x-gen-pre.hook"

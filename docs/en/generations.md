@@ -127,8 +127,9 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
   creates generation `0001` (`reason: install`, live subvol `/@`) after the
   bootloader step, with `X_GEN_LIVE_SUBVOL=/@`.
 
-`x gen new` records state; it does not change the default boot (use
-`x gen rollback` for that).
+`x gen new` records state and makes the new generation the default boot target
+(the newest generation wins on the next boot). `x gen rollback <id>` still
+overrides the default until the next generation is created.
 
 ## Export and import
 

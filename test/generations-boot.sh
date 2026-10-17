@@ -69,7 +69,8 @@ ID2="$(xgen_new upgrade)"
 check "second generation is 0002" test "$ID2" = "0002"
 check "frozen generation uses its archived kernel" grep -q '^linux   /x/gen-0002/vmlinuz-linux' "$SB/x-gen-0002.conf"
 check "archived kernel copied to the ESP" test -f "$X_GEN_BOOT_DIR/x/gen-0002/vmlinuz-linux"
-check "default keeps following the running generation" grep -q '^default x-gen-0001.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
+check "a new generation becomes the default" grep -q '^default x-gen-0002.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
+check "grub follows the newest generation" grep -q '^set default=x-gen-0002' "$GRUB/custom.cfg"
 
 export X_GEN_RUNNING=0002
 xgen_new upgrade >/dev/null
@@ -82,7 +83,7 @@ check "pruned entry removed from the ESP" test ! -f "$SB/x-gen-0002.conf"
 check "pruned kernel copy removed" test ! -d "$X_GEN_BOOT_DIR/x/gen-0002"
 check "pruned generation keeps its archive snapshot" test -d "$X_GEN_SNAPSHOTS/0002"
 check "pruned generation keeps its metadata" test -f "$X_GEN_DIR/0002/manifest.json"
-check "default entry is kept" test -f "$SB/x-gen-0001.conf"
+check "default entry is kept" test -f "$SB/x-gen-0004.conf"
 
 echo "== rollback =="
 export X_GEN_RUNNING=0004

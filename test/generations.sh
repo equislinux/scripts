@@ -80,7 +80,7 @@ echo "== second generation =="
 ID2="$(xgen_new test second)"
 check "second generation is 0002" test "$ID2" = "0002"
 check "second records parent 0001" grep -q '"parent": "0001"' "$X_GEN_DIR/0002/manifest.json"
-check "records do not steal the default boot" test "$(xgen_current)" = "0001"
+check "records make the new generation the default" test "$(xgen_current)" = "0002"
 
 echo "== verify =="
 check "verify matches the generation" xgen_verify 0002
@@ -96,8 +96,8 @@ fi
 echo "== list =="
 LIST="$(xgen_list)"
 check "list shows 0001" grep -q '^0001 ' <<< "$LIST"
-check "list marks the default one" grep -q '^0001 \*' <<< "$LIST"
-check "list marks the running one" grep -q '^0001 \*r' <<< "$LIST"
+check "list marks the default one" grep -q '^0002 \*' <<< "$LIST"
+check "list marks the running one" grep -q '^0001 r' <<< "$LIST"
 
 echo "== diff =="
 printf 'kitty 1.0-1\nfoo 2.0-1\n' > "$X_GEN_DIR/0001/packages.tsv"
