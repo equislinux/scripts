@@ -11,8 +11,10 @@ set -euo pipefail
 #     ships inside x-scripts at $X_HYPR_CONFIG/equisdots (regenerated with
 #     packaging/vendor-config.sh) and is placed exactly like `dots install`
 #     does (configs, shell, palettes, engines, wrappers, login theme, PAM).
-#   ONLINE fallback (dev checkout / snapshot absent): clones equisdots/dots to
-#     the cache and runs `dots install` (the official placement).
+#   ONLINE (dev checkout, snapshot absent or X_HYPR_ONLINE=1): clones
+#     equisdots/dots to the cache, runs `dots install` (the official placement:
+#     repos, plugins, settings) and fetches the app configs (kitty/starship/
+#     nvim) from xscriptor-colors.
 #
 # NVIDIA is owned by the X hardware phase (hardware/nvidia.sh). This tool only
 # falls back to the upstream equisdots NVIDIA setup (hyprland/install.sh
@@ -26,6 +28,8 @@ set -euo pipefail
 #   X_HYPR_CONFIG     packaged config tree (default: /usr/share/x/config)
 #   X_HYPR_SOURCE     snapshot root override (tests/dev; $X_HYPR_SOURCE/equisdots)
 #   X_HYPR_REF        branch/commit of the equisdots/dots fallback (default: main)
+#   X_HYPR_ONLINE     1 = ignore the bundled snapshot; install the latest stack
+#   X_APP_REF         branch/ref for the app configs (kitty/starship/nvim; main)
 #   X_HYPR_BASE       equisdots data dir (default: ~/.local/share/equisdots)
 #   X_HYPR_DRYRUN     1 = resolve the source and print the plan only
 #   X_HYPR_OFFLINE    1 = force offline mode (never clone; error if no snapshot)
@@ -49,6 +53,37 @@ UPSTREAM_URL="https://github.com/equisdots/dots.git"
 
 root() { sudo "$@"; }
 
+# Online mode also fetches the app configs (the snapshot is skipped). The
+# normalized layout mirrors packaging/vendor-config.sh: kitty/, starship/, nvim/.
+prepare_online_app_configs() {
+    local ref="${X_APP_REF:-main}" tmp="$CACHE/appconfigs"
+    APP_CFG=""
+    rm -rf "$tmp" 2>/dev/null || return 0
+    mkdir -p "$tmp" 2>/dev/null || return 0
+    if ! git clone -q --depth 1 --branch "$ref" \
+            https://github.com/xscriptor-colors/terminal.git "$tmp/terminal"; then
+        warn "app configs: could not clone xscriptor-colors/terminal ($ref)"
+        return 0
+    fi
+    git clone -q --depth 1 --branch "$ref" \
+        https://github.com/xscriptor-colors/nvim.git "$tmp/nvim" \
+        || warn "app configs: could not clone xscriptor-colors/nvim ($ref)"
+    mkdir -p "$tmp/x/kitty/themes" "$tmp/x/starship"
+    [[ -f "$tmp/terminal/emulators/kitty/config" ]] \
+        && cp -a "$tmp/terminal/emulators/kitty/config" "$tmp/x/kitty/kitty.conf"
+    [[ -d "$tmp/terminal/emulators/kitty/themes" ]] \
+        && cp -a "$tmp/terminal/emulators/kitty/themes/." "$tmp/x/kitty/themes/"
+    [[ -d "$tmp/terminal/emulators/kitty/shaders" ]] \
+        && cp -a "$tmp/terminal/emulators/kitty/shaders" "$tmp/x/kitty/shaders"
+    [[ -d "$tmp/terminal/prompts/starship" ]] \
+        && cp -a "$tmp/terminal/prompts/starship/." "$tmp/x/starship/"
+    if [[ -d "$tmp/nvim" ]]; then
+        cp -a "$tmp/nvim" "$tmp/x/nvim"
+        rm -rf "$tmp/x/nvim/.git" "$tmp/x/nvim/.github"
+    fi
+    APP_CFG="$tmp/x"
+}
+
 mkdir -p "$CACHE"
 
 # --- resolve the payload source (offline snapshot first) -------------------
@@ -58,7 +93,14 @@ CFG=""
 SRC=""
 DOTS_BIN=""
 
-if [[ -d "$PAYLOAD/equisdots/hyprland" ]]; then
+if [[ "${X_HYPR_ONLINE:-0}" == "1" && "${X_HYPR_OFFLINE:-0}" == "1" ]]; then
+    error "X_HYPR_ONLINE and X_HYPR_OFFLINE are mutually exclusive"
+fi
+
+if [[ "${X_HYPR_ONLINE:-0}" == "1" ]]; then
+    MODE="online"
+    log "online mode requested (X_HYPR_ONLINE=1); ignoring the bundled snapshot"
+elif [[ -d "$PAYLOAD/equisdots/hyprland" ]]; then
     CFG="$PAYLOAD"
     MODE="offline"
     log "offline payload found in packaged tree: $CFG/equisdots"
@@ -66,6 +108,19 @@ elif [[ "${X_HYPR_OFFLINE:-0}" == "1" ]]; then
     error "offline mode requested but no equisdots snapshot at $PAYLOAD/equisdots"
 else
     MODE="online"
+fi
+
+# Dry-run resolves the mode and prints the plan without touching the network.
+if [[ "${X_HYPR_DRYRUN:-0}" == "1" ]]; then
+    if [[ "$MODE" == "offline" ]]; then
+        log "dry-run: install deps + deploy the equisdots snapshot from $CFG (offline) + login/PAM/services"
+    else
+        log "dry-run: clone equisdots/dots + install deps + deploy the payload + app configs + login/PAM/services"
+    fi
+    exit 0
+fi
+
+if [[ "$MODE" == "online" ]]; then
     SRC="$(mktemp -d "$CACHE/equisdots-dots.XXXXXX")"
     [[ "${X_HYPR_KEEP_SRC:-0}" != "1" ]] && trap 'rm -rf "$SRC"' EXIT
     log "cloning $UPSTREAM_URL (branch $X_HYPR_REF)"
@@ -83,21 +138,19 @@ if [[ "$MODE" == "offline" ]]; then
     STARSHIP_SRC="$CFG/starship"
     NVIM_SRC="$CFG/nvim"
 else
+    prepare_online_app_configs
     HYPR_SRC="$BASE/hyprland"
     LOGIN_SRC="$BASE/login"
     XWWW_SRC="$BASE/dots/scripts/install-xwww.sh"
-    KITTY_SRC=""
-    STARSHIP_SRC=""
-    NVIM_SRC=""
-fi
-
-if [[ "${X_HYPR_DRYRUN:-0}" == "1" ]]; then
-    if [[ "$MODE" == "offline" ]]; then
-        log "dry-run: install deps + deploy the equisdots snapshot from $CFG (offline) + login/PAM/services"
+    if [[ -n "$APP_CFG" ]]; then
+        KITTY_SRC="$APP_CFG/kitty"
+        STARSHIP_SRC="$APP_CFG/starship"
+        NVIM_SRC="$APP_CFG/nvim"
     else
-        log "dry-run: clone equisdots/dots + install deps + deploy the payload + login/PAM/services"
+        KITTY_SRC=""
+        STARSHIP_SRC=""
+        NVIM_SRC=""
     fi
-    exit 0
 fi
 
 # --- build jobs vs RAM -------------------------------------------------------
@@ -345,23 +398,23 @@ fi
 
 # --- app configs from the snapshot (kitty/starship/nvim) --------------------
 if [[ -n "$KITTY_SRC" && -d "$KITTY_SRC" ]]; then
-    echo "== kitty config (offline)"
+    echo "== kitty config"
     sync_tree "$KITTY_SRC" "$CONFIG_DIR/kitty" --exclude '.git*'
     ensure_kitty_shader_config
 fi
 if [[ -n "$STARSHIP_SRC" && -d "$STARSHIP_SRC" ]]; then
-    echo "== starship config (offline)"
+    echo "== starship config"
     # Canonical root expected by theme-sync (~/.config/equisdots/starship).
     sync_tree "$STARSHIP_SRC" "$CONFIG_DIR/equisdots/starship" --exclude '.git*'
 fi
 if [[ -n "$NVIM_SRC" && -d "$NVIM_SRC" ]]; then
-    echo "== nvim config (offline)"
+    echo "== nvim config"
     sync_tree "$NVIM_SRC" "$CONFIG_DIR/nvim" --exclude '.git*' --exclude '.github/'
 fi
 
-# Palette artifacts for the freshly deployed app configs (offline snapshot).
-if [[ "$MODE" == "offline" && -x "$BASE/theme-sync/theme-sync.sh" ]] \
-   && has_cmd python3 && has_cmd jq; then
+# Palette artifacts for the freshly deployed app configs (offline snapshot or
+# online clones; theme-sync is present in both after the payload step).
+if [[ -x "$BASE/theme-sync/theme-sync.sh" ]] && has_cmd python3 && has_cmd jq; then
     echo "== theme-sync (palette artifacts)"
     bash "$BASE/theme-sync/theme-sync.sh" || warn "theme-sync finished with warnings"
 fi

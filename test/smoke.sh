@@ -95,6 +95,24 @@ check "tool defaults to /usr/share/x/config for offline configs" \
     grep -q "/usr/share/x/config" "$SRC/tools/hyprland-install.sh"
 check "tool delegates the online fallback to equisdots/dots" \
     grep -q "github.com/equisdots/dots.git" "$SRC/tools/hyprland-install.sh"
+check "online mode fetches the app configs" \
+    grep -q "xscriptor-colors/terminal.git" "$SRC/tools/hyprland-install.sh"
+
+# Forced online mode resolves without touching the network in dry-run.
+if X_HYPR_DRYRUN=1 X_HYPR_ONLINE=1 X_HYPR_CONFIG="$TMP/no-such-tree" \
+    bash "$SRC/tools/hyprland-install.sh" > "$TMP/hypr-online.out" 2>&1; then
+    check "X_HYPR_ONLINE dry-run resolves online mode" true
+else
+    check "X_HYPR_ONLINE dry-run resolves online mode" false
+fi
+check "online dry-run prints the online plan" \
+    grep -q "dry-run: clone equisdots/dots" "$TMP/hypr-online.out"
+if X_HYPR_DRYRUN=1 X_HYPR_ONLINE=1 X_HYPR_OFFLINE=1 X_HYPR_CONFIG="$TMP/no-such-tree" \
+    bash "$SRC/tools/hyprland-install.sh" >/dev/null 2>&1; then
+    check "X_HYPR_ONLINE + X_HYPR_OFFLINE fails" false
+else
+    check "X_HYPR_ONLINE + X_HYPR_OFFLINE fails" true
+fi
 
 echo "== CLI =="
 chmod +x "$SRC"/bin/x "$SRC"/bin/*.sh

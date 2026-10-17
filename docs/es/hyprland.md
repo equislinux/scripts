@@ -108,6 +108,19 @@ dots install       # clonar/actualizar el payload
 dots doctor        # comprobar dependencias, clones y rutas instaladas
 ```
 
+## Modos de despliegue
+
+- **Offline (por defecto en un sistema instalado):** usa el snapshot de
+  equisdots incluido en `x-scripts` (`/usr/share/x/config`).
+- **Online (`X_HYPR_ONLINE=1`):** ignora el snapshot, clona `equisdots/dots`
+  (ref configurable con `X_HYPR_REF`), ejecuta su `dots install` oficial
+  (repos, plugins y merge de settings) y descarga las configs de apps
+  (kitty/starship/nvim) desde `xscriptor-colors`. Si falla, el instalador cae
+  al snapshot.
+
+El instalador elige el modo con `hyprland=yes` (snapshot) o
+`hyprland=online` (lo último desde GitHub; `hyprland_ref` opcional en el JSON).
+
 ## Flags / entorno
 
 | Variable | Default | Significado |
@@ -115,6 +128,8 @@ dots doctor        # comprobar dependencias, clones y rutas instaladas
 | `X_HYPR_CONFIG` | `/usr/share/x/config` | Árbol de config empaquetado (offline). |
 | `X_HYPR_SOURCE` | — | Override de la raíz del snapshot (`$X_HYPR_SOURCE/equisdots`); solo lectura. |
 | `X_HYPR_REF` | `main` | Rama/commit del clon de fallback `equisdots/dots`. |
+| `X_HYPR_ONLINE` | `0` | `1` = ignorar el snapshot y desplegar lo último desde GitHub. |
+| `X_APP_REF` | `main` | Rama/commit de las configs de apps (solo modo online). |
 | `X_HYPR_BASE` | `~/.local/share/equisdots` | Destino de clones/wrappers. |
 | `X_HYPR_DRYRUN` | `0` | `1` = resolver la fuente y solo imprimir el plan (sin instalar). |
 | `X_HYPR_OFFLINE` | `0` | `1` = forzar offline; falla en vez de clonar. |
@@ -125,6 +140,8 @@ dots doctor        # comprobar dependencias, clones y rutas instaladas
 X_HYPR_DRYRUN=1 X_HYPR_SOURCE=/ruta/a/x-config bash tools/hyprland-install.sh
 # solo plan, árbol offline
 X_HYPR_DRYRUN=1 X_HYPR_CONFIG=/usr/share/x/config bash tools/hyprland-install.sh
+# solo plan, modo online (sin red en dry-run)
+X_HYPR_DRYRUN=1 X_HYPR_ONLINE=1 bash tools/hyprland-install.sh
 # setup completo para el usuario actual
 bash tools/hyprland-install.sh
 ```
