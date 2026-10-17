@@ -107,6 +107,18 @@ dots install       # clone/update the payload
 dots doctor        # check dependencies, clones and installed paths
 ```
 
+## Deployment modes
+
+- **Offline (default on an installed system):** uses the equisdots snapshot
+  shipped in `x-scripts` (`/usr/share/x/config`).
+- **Online (`X_HYPR_ONLINE=1`):** ignores the snapshot, clones `equisdots/dots`
+  (ref via `X_HYPR_REF`), runs its official `dots install` (repos, plugins and
+  the settings merge) and fetches the app configs (kitty/starship/nvim) from
+  `xscriptor-colors`. If it fails, the installer falls back to the snapshot.
+
+The installer picks the mode with `hyprland=yes` (snapshot) or
+`hyprland=online` (latest from GitHub; optional `hyprland_ref` in the JSON).
+
 ## Flags / environment
 
 | Variable | Default | Meaning |
@@ -114,6 +126,8 @@ dots doctor        # check dependencies, clones and installed paths
 | `X_HYPR_CONFIG` | `/usr/share/x/config` | Packaged (offline) config tree. |
 | `X_HYPR_SOURCE` | — | Snapshot root override (`$X_HYPR_SOURCE/equisdots`); read-only. |
 | `X_HYPR_REF` | `main` | Branch/commit of the `equisdots/dots` fallback clone. |
+| `X_HYPR_ONLINE` | `0` | `1` = ignore the snapshot and deploy the latest stack from GitHub. |
+| `X_APP_REF` | `main` | Branch/commit of the app configs (online mode only). |
 | `X_HYPR_BASE` | `~/.local/share/equisdots` | Repo clones/wrappers target. |
 | `X_HYPR_DRYRUN` | `0` | `1` = resolve the source and print the plan only (no install). |
 | `X_HYPR_OFFLINE` | `0` | `1` = force offline; fail instead of cloning. |
@@ -124,6 +138,8 @@ dots doctor        # check dependencies, clones and installed paths
 X_HYPR_DRYRUN=1 X_HYPR_SOURCE=/path/to/x-config bash tools/hyprland-install.sh
 # plan only, offline tree
 X_HYPR_DRYRUN=1 X_HYPR_CONFIG=/usr/share/x/config bash tools/hyprland-install.sh
+# plan only, online mode (no network in dry-run)
+X_HYPR_DRYRUN=1 X_HYPR_ONLINE=1 bash tools/hyprland-install.sh
 # full setup for the current user
 bash tools/hyprland-install.sh
 ```
