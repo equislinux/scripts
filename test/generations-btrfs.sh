@@ -108,7 +108,8 @@ check "snapshot 0002 is writable (bootable restore point)" \
     test "$(btrfs property get "$X_GEN_SNAPSHOTS/0002" ro)" = "ro=false"
 check "manifest records the derived /@snapshots/0002" grep -q '"root_subvol": "/@snapshots/0002"' "$X_GEN_DIR/0002/manifest.json"
 check "entry 0002 uses the derived subvol" grep -q 'rootflags=subvol=/@snapshots/0002' "$X_GEN_BOOT_DIR/loader/entries/x-gen-0002.conf"
-check "frozen kernel copied to the ESP" test -f "$X_GEN_BOOT_DIR/x/gen-0002/vmlinuz-linux"
+check "frozen kernel copied to the ESP" \
+    test -n "$(find "$X_GEN_BOOT_DIR/x/kernels" -name vmlinuz-linux -print -quit)"
 
 CHECKMNT="$(mktemp -d)"
 mount -o "ro,subvol=/@snapshots/0002" "$LOOP" "$CHECKMNT"

@@ -4,7 +4,7 @@ set -euo pipefail
 # Boot-entry and rollback tests without root (dir backend, fake ESP).
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+trap 'chmod -R u+w "$TMP" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 
 export X_GEN_BACKEND=dir
 export X_GEN_ROOT="$TMP/root"
@@ -67,8 +67,12 @@ export X_GEN_RUNNING=0001
 printf 'v2\n' > "$X_GEN_ROOT/etc/app.conf"
 ID2="$(xgen_new upgrade)"
 check "second generation is 0002" test "$ID2" = "0002"
-check "frozen generation uses its archived kernel" grep -q '^linux   /x/gen-0002/vmlinuz-linux' "$SB/x-gen-0002.conf"
-check "archived kernel copied to the ESP" test -f "$X_GEN_BOOT_DIR/x/gen-0002/vmlinuz-linux"
+check "frozen generation uses its archived kernel" \
+    grep -Eq '^linux   /x/kernels/default-[0-9a-f]+/vmlinuz-linux' "$SB/x-gen-0002.conf"
+check "archived kernel copied to the ESP" \
+    test -n "$(find "$X_GEN_BOOT_DIR/x/kernels" -name vmlinuz-linux -print -quit)"
+check "the same kernel is copied once" \
+    test "$(find "$X_GEN_BOOT_DIR/x/kernels" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
 check "a new generation becomes the default" grep -q '^default x-gen-0002.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
 check "grub follows the newest generation" grep -q '^set default=x-gen-0002' "$GRUB/custom.cfg"
 
@@ -80,7 +84,8 @@ xgen_new upgrade >/dev/null
 echo "== ESP retention =="
 check "newest entry kept" test -f "$SB/x-gen-0004.conf"
 check "pruned entry removed from the ESP" test ! -f "$SB/x-gen-0002.conf"
-check "pruned kernel copy removed" test ! -d "$X_GEN_BOOT_DIR/x/gen-0002"
+check "shared kernel copy survives while kept generations use it" \
+    test "$(find "$X_GEN_BOOT_DIR/x/kernels" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
 check "pruned generation keeps its archive snapshot" test -d "$X_GEN_SNAPSHOTS/0002"
 check "pruned generation keeps its metadata" test -f "$X_GEN_DIR/0002/manifest.json"
 check "default entry is kept" test -f "$SB/x-gen-0004.conf"
@@ -125,26 +130,49 @@ check "newest generation survives" test -d "$X_GEN_DIR/0005"
 
 echo "== automatic generations skip unchanged state =="
 xgen_current_set 0005
-export X_GEN_RUNNING=0005
+export X_GEN_RUNNING=0002
 ID="$(xgen_new setup noop)"
 check "unchanged automatic generation is skipped" test "$ID" = "0005"
 check "no generation directory was created" test ! -d "$X_GEN_DIR/0006"
+export X_GEN_RUNNING=0005
+ID="$(xgen_new pacman-pre safety)"
+check "the running generation always records a pre-safety" test "$ID" = "0006"
+check "safety generation directory exists" test -d "$X_GEN_DIR/0006"
 printf 'kernel-v2\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
 ID="$(xgen_new setup changed)"
-check "changed automatic generation is recorded" test "$ID" = "0006"
+check "changed automatic generation is recorded" test "$ID" = "0007"
+check "a new kernel gets its own shared copy" \
+    test "$(find "$X_GEN_BOOT_DIR/x/kernels" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 2
 
 echo "== every generation is shown in boot =="
 export X_GEN_BOOT_KEEP=0
 xgen_boot_sync
-for gid in 0002 0003 0005 0006; do
+for gid in 0002 0003 0005 0006 0007; do
     check "systemd-boot entry $gid kept" test -f "$SB/x-gen-$gid.conf"
 done
 check "grub lists generation 0002" grep -q -- '--id x-gen-0002' "$GRUB/custom.cfg"
 check "grub lists generation 0005" grep -q -- '--id x-gen-0005' "$GRUB/custom.cfg"
 check "newest generation is the systemd-boot default" \
-    grep -q '^default x-gen-0006.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
+    grep -q '^default x-gen-0007.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
 check "newest generation is the grub default" \
-    grep -q '^set default=x-gen-0006' "$GRUB/custom.cfg"
+    grep -q '^set default=x-gen-0007' "$GRUB/custom.cfg"
+
+echo "== copy failure guard =="
+chmod 555 "$X_GEN_BOOT_DIR/x/kernels"
+xgen_current_set 0007
+export X_GEN_RUNNING=0007
+printf 'kernel-v3\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
+ERR="$(xgen_new setup newkernel 2>&1 >/dev/null)"
+check "copy failure is reported with the real error" grep -qi 'cannot copy.*Permission denied' <<< "$ERR"
+check "the generation is still recorded" test -d "$X_GEN_DIR/0008"
+check "the entry of the failed copy is skipped" test ! -f "$SB/x-gen-0008.conf"
+check "default falls back to the newest written entry" \
+    grep -q '^default x-gen-0007.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
+chmod 755 "$X_GEN_BOOT_DIR/x/kernels"
+xgen_boot_sync
+check "entry is written once the ESP is writable again" test -f "$SB/x-gen-0008.conf"
+check "default moves back to the newest generation" \
+    grep -q '^default x-gen-0008.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
 
 echo "== CLI =="
 OUT="$(X_GEN_RUNNING=0002 bash "$SRC/bin/x" gen status)"

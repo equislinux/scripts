@@ -111,11 +111,14 @@ posible si estaba unpinned), limpia el marcador.
   `/boot/x/gen-<id>/<pkgbase>/`. Las generaciones legacy de un solo kernel
   mantienen el layout viejo y emparejan vmlinuz/initramfs por sufijo.
 - Por defecto (`X_GEN_BOOT_KEEP=0`) **todas** las generaciones tienen su entry
-  (systemd-boot y GRUB) y su kernel archivado en el ESP. Un
-  `X_GEN_BOOT_KEEP` positivo limita el menú a las N más recientes más la
-  default, la running y las `pinned`; podar el ESP nunca borra el snapshot
-  btrfs ni los metadatos, así que cualquier generación se puede volver a
-  seleccionar (`rollback` recrea su entry y su copia de kernel a demanda).
+  (systemd-boot y GRUB). Los pares kernel/initramfs se guardan una sola vez en
+  `/boot/x/kernels/<pkgbase>-<id-de-contenido>` y los comparten todas las
+  generaciones que usan el mismo par, así que instalar sin cambiar el kernel
+  no consume una copia nueva del ESP. Un `X_GEN_BOOT_KEEP` positivo limita el
+  menú a las N más recientes más la default, la running y las `pinned`; podar
+  el ESP nunca borra el snapshot btrfs ni los metadatos, así que cualquier
+  generación se puede volver a seleccionar (`rollback` recrea su entry y su
+  copia compartida a demanda).
 - La generación más reciente es el default boot: `x gen new` la registra como
   `current` y reescribe el default del loader/GRUB en el mismo paso.
 - `x gen rollback <id>` crea una generación de **seguridad** pre-rollback,
@@ -143,9 +146,10 @@ Los llamadores automáticos (`x setup`, `x update`, `x gen apply` y los hooks
 pre/post de pacman) omiten la generación cuando paquetes, servicios,
 migraciones y kernel son idénticos a la actual, así que una transacción sin
 cambios no deja una generación vacía en la lista ni en el menú de boot.
-`x gen new` manual, la primera generación del instalador y las generaciones de
-seguridad `pre-rollback`/`pre-update` sobre un root vivo (mutable) siempre se
-registran.
+`x gen new` manual, la primera generación del instalador y `pre-rollback`
+siempre se registran; la seguridad `pacman-pre`/`pre-update` se registra
+siempre que la generación actual sea la running (su root mutable no queda
+respaldado por el snapshot hasta que termina la transacción).
 
 ## Export e import
 
