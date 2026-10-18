@@ -70,10 +70,14 @@ echo "== frozen generation entries (archived per pkgbase) =="
 export X_GEN_RUNNING=0001
 ID2="$(xgen_new upgrade)"
 check "second generation is 0002" test "$ID2" = "0002"
-check "primary archived under linux/" test -f "$X_GEN_BOOT_DIR/x/gen-0002/linux/vmlinuz-linux"
-check "lts archived under linux-lts/" test -f "$X_GEN_BOOT_DIR/x/gen-0002/linux-lts/vmlinuz-linux-lts"
-check "primary entry points at the archive" grep -q '^linux   /x/gen-0002/linux/vmlinuz-linux$' "$SB/x-gen-0002.conf"
-check "lts entry points at the archive" grep -q '^linux   /x/gen-0002/linux-lts/vmlinuz-linux-lts$' "$SB/x-gen-0002-linux-lts.conf"
+check "primary archived in a shared copy" \
+    test -n "$(find "$X_GEN_BOOT_DIR/x/kernels" -path '*/linux-*/vmlinuz-linux' -print -quit)"
+check "lts archived in a shared copy" \
+    test -n "$(find "$X_GEN_BOOT_DIR/x/kernels" -path '*/linux-lts-*/vmlinuz-linux-lts' -print -quit)"
+check "primary entry points at the shared copy" \
+    grep -Eq '^linux   /x/kernels/linux-[0-9a-f]+/vmlinuz-linux$' "$SB/x-gen-0002.conf"
+check "lts entry points at the shared copy" \
+    grep -Eq '^linux   /x/kernels/linux-lts-[0-9a-f]+/vmlinuz-linux-lts$' "$SB/x-gen-0002-linux-lts.conf"
 check "grub has both entries" bash -c "grep -q -- '--id x-gen-0002 ' '$GRUB/custom.cfg' && grep -q -- '--id x-gen-0002-linux-lts' '$GRUB/custom.cfg'"
 
 if [[ "$FAIL" -eq 0 ]]; then

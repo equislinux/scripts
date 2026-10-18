@@ -107,11 +107,13 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
   per pkgbase under `/boot/x/gen-<id>/<pkgbase>/`. Legacy single-kernel
   generations keep the old layout and pair vmlinuz/initramfs by name suffix.
 - By default (`X_GEN_BOOT_KEEP=0`) every generation gets its own menu entry
-  (systemd-boot and GRUB) and its archived kernel stays on the ESP. Set a
-  positive `X_GEN_BOOT_KEEP` to cap the menu at the newest N plus the default,
-  running and `pinned` ones; pruning the ESP never deletes the btrfs snapshot
-  or the metadata, so any generation can be re-selected later (`rollback`
-  recreates its entry and kernel copy on demand).
+  (systemd-boot and GRUB). Kernel/initramfs pairs are stored once under
+  `/boot/x/kernels/<pkgbase>-<content-id>` and shared by every generation that
+  uses the same pair, so repeated installs without a kernel change do not
+  consume a new ESP copy. Set a positive `X_GEN_BOOT_KEEP` to cap the menu at
+  the newest N plus the default, running and `pinned` ones; pruning the ESP
+  never deletes the btrfs snapshot or the metadata, so any generation can be
+  re-selected later (`rollback` recreates its entry and shared copy on demand).
 - The newest generation is the boot default: `x gen new` records it as
   `current` and rewrites the loader/GRUB default in the same step.
 - `x gen rollback <id>` creates a pre-rollback **safety** generation, pins the
@@ -139,8 +141,10 @@ Automatic callers (`x setup`, `x update`, `x gen apply`, the pacman pre/post
 hooks) skip the generation when packages, services, migrations and the kernel
 are identical to the current one, so a no-op transaction does not leave an
 empty generation in the list or the boot menu. Manual `x gen new`, the
-installer first generation and `pre-rollback`/`pre-update` safety generations
-on a live (mutable) root are always recorded.
+installer first generation and `pre-rollback` are always recorded; the
+`pacman-pre`/`pre-update` safety generation is always recorded when the
+current generation is the running one (its mutable root is not replaced by
+the snapshot until the transaction finishes).
 
 ## Export and import
 

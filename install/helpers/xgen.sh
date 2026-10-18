@@ -260,6 +260,9 @@ xgen_capture_kernel() {
     local id="$1" dest f
     dest="$(xgen_gen_dir "$id")/boot"
     mkdir -p "$dest"
+    # The archive is refreshed for the running generation: invalidate the
+    # cached pair ids so the shared ESP copy is recomputed from the new files.
+    rm -f "$dest"/*.id
     local found=0
     for f in "$X_GEN_ROOT"/boot/vmlinuz-* "$X_GEN_ROOT"/boot/initramfs-*.img; do
         [[ -f "$f" ]] || continue
@@ -564,6 +567,60 @@ xgen_boot_enabled() {
 
 
 
+# Cached content id of a generation's kernel+initramfs pair. The id lives in
+# the generation metadata (btrfs), never on the ESP, so repeated boot syncs do
+# not re-hash hundreds of megabytes.
+xgen_kernel_id() { # id pkgbase vname iname
+    local id="$1" pkgbase="$2" vname="$3" iname="$4"
+    local dir cache h
+    dir="$(xgen_gen_dir "$id")/boot"
+    cache="$dir/$pkgbase.id"
+    if [[ -s "$cache" ]]; then
+        cat "$cache"
+        return 0
+    fi
+    h="$( { sha256sum "$dir/$vname" 2>/dev/null | cut -d' ' -f1; \
+            sha256sum "$dir/$iname" 2>/dev/null | cut -d' ' -f1; } \
+        | sha256sum | cut -c1-16)"
+    [[ -n "$h" ]] || return 1
+    printf '%s\n' "$h" > "$cache" 2>/dev/null || true
+    printf '%s\n' "$h"
+}
+
+# Ensures a frozen generation's kernel+initramfs has one shared copy on the
+# ESP, named by content. Repeated installs with the same kernel reuse it
+# instead of copying a new pair per generation. Echoes the path relative to
+# the boot dir (e.g. x/kernels/linux-0123456789abcdef) or fails with a warning.
+xgen_boot_kernel_dir() { # id pkgbase vname iname
+    local id="$1" pkgbase="$2" vname="$3" iname="$4"
+    local bootdir src_v src_i hid name dir err
+    bootdir="$X_GEN_BOOT_DIR"
+    src_v="$(xgen_gen_dir "$id")/boot/$vname"
+    src_i="$(xgen_gen_dir "$id")/boot/$iname"
+    hid="$(xgen_kernel_id "$id" "$pkgbase" "$vname" "$iname")" || {
+        xgen_warn "generation $id: cannot hash the $pkgbase kernel; entry skipped"
+        return 1
+    }
+    name="${pkgbase}-${hid}"
+    dir="$bootdir/x/kernels/$name"
+    if [[ -f "$dir/$vname" && -f "$dir/$iname" ]]; then
+        printf 'x/kernels/%s\n' "$name"
+        return 0
+    fi
+    mkdir -p "$bootdir/x/kernels" 2>/dev/null || true
+    err="$(mktemp)"
+    if ! mkdir -p "$dir" 2>"$err" \
+        || ! cp -f "$src_v" "$dir/$vname" 2>"$err" \
+        || ! cp -f "$src_i" "$dir/$iname" 2>"$err"; then
+        rm -rf "$dir"
+        xgen_warn "generation $id: cannot copy the $pkgbase kernel to the ESP ($(head -1 "$err" 2>/dev/null)); entry skipped"
+        rm -f "$err"
+        return 1
+    fi
+    rm -f "$err"
+    printf 'x/kernels/%s\n' "$name"
+}
+
 xgen_boot_sync() {
     local force="${1:-}"
     xgen_boot_enabled || return 0
@@ -653,11 +710,18 @@ xgen_boot_sync() {
     mkdir -p "$bootdir/x"
     local entries="" cmd title
     local -A written=()
+    local -A used=()
+    # Legacy per-generation copies are superseded by the shared content store.
+    # Remove them first so a full ESP can make room for the shared copy.
+    local legacy
+    for legacy in "$bootdir"/x/gen-*; do
+        [[ -d "$legacy" ]] && rm -rf "$legacy"
+    done
     for id in "${keep_ids[@]}"; do
         [[ -n "${keep[$id]:-}" ]] || continue
 
         # Per-kernel rows (multi-kernel): pkgbase|release|vmlinuz|initramfs.
-        local rows=() row pkgbase rel vname iname kfile ifile dest subdir
+        local rows=() row pkgbase rel vname iname kfile ifile
         local primary="" rp
         while IFS=$'\t' read -r pkgbase rel vname iname; do
             [[ -n "$pkgbase" ]] && rows+=("$pkgbase|$rel|$vname|$iname")
@@ -689,7 +753,6 @@ xgen_boot_sync() {
         for row in "${rows[@]}"; do
             IFS='|' read -r pkgbase rel vname iname <<< "$row"
             local suffix="" lin initrd
-            subdir=""
             [[ "$pkgbase" != "$primary" ]] && suffix="-$pkgbase"
             if [[ "$id" == "$running" ]]; then
                 # The running generation boots the live ESP kernels (its root
@@ -701,21 +764,15 @@ xgen_boot_sync() {
                 lin="/$vname"
                 initrd="/$iname"
             else
-                [[ "$pkgbase" == "default" ]] || subdir="$pkgbase"
                 if [[ ! -f "$(xgen_gen_dir "$id")/boot/$vname" || ! -f "$(xgen_gen_dir "$id")/boot/$iname" ]]; then
                     xgen_warn "generation $id has no archived $pkgbase kernel; entry skipped"
                     continue
                 fi
-                dest="$bootdir/x/gen-$id${subdir:+/$subdir}"
-                mkdir -p "$dest"
-                if ! cp -a "$(xgen_gen_dir "$id")/boot/$vname" "$dest/$vname" 2>/dev/null \
-                    || ! cp -a "$(xgen_gen_dir "$id")/boot/$iname" "$dest/$iname" 2>/dev/null; then
-                    rm -rf "$dest"
-                    xgen_warn "generation $id: cannot copy the $pkgbase kernel to the ESP (no space?); entry skipped"
-                    continue
-                fi
-                lin="/x/gen-$id${subdir:+/$subdir}/$vname"
-                initrd="/x/gen-$id${subdir:+/$subdir}/$iname"
+                local rel
+                rel="$(xgen_boot_kernel_dir "$id" "$pkgbase" "$vname" "$iname")" || continue
+                used[${rel##*/}]=1
+                lin="/$rel/$vname"
+                initrd="/$rel/$iname"
             fi
             cmd="$(xgen_cmdline_for_gen "$id")"
             title="X Linux (gen $id, $(xgen_manifest_field "$id" reason))"
@@ -763,19 +820,12 @@ menuentry \"$title\" --id x-gen-$id$suffix {
         def_cmd=""
     fi
 
-    # Prune ESP copies/entries outside the keep set.
-    local d
-    for d in "$bootdir"/x/gen-*; do
+    # Shared kernel copies that no kept entry references are no longer needed.
+    local d name
+    for d in "$bootdir"/x/kernels/*; do
         [[ -d "$d" ]] || continue
-        id="${d##*/gen-}"
-        if [[ -z "${keep[$id]:-}" ]]; then
-            rm -rf "$d"
-            rm -f "$sb_dir/x-gen-$id.conf"
-            local e
-            for e in "$sb_dir/x-gen-$id-"*.conf; do
-                [[ -e "$e" ]] && rm -f "$e"
-            done
-        fi
+        name="${d##*/}"
+        [[ -n "${used[$name]:-}" ]] || rm -rf "$d"
     done
 
     # Live generations have no archived-kernel dir under x/gen-*, so their
@@ -839,6 +889,16 @@ xgen_reason_dedupes() {
     return 1
 }
 
+# Pre-transaction safety generations must be recorded even when the running
+# generation's state seems unchanged: the running root mutates in place, so
+# its snapshot is not an immutable pre-transaction restore point.
+xgen_reason_pre_safety() {
+    case "$1" in
+        pacman-pre|pre-update) return 0 ;;
+    esac
+    return 1
+}
+
 # True when the captures in $2 describe the same state as generation $1:
 # packages, services, migrations, kernel release and kernel files.
 xgen_state_unchanged() {
@@ -878,10 +938,16 @@ xgen_new() {
     xgen_capture_migrations "$dir/migrations.txt"
     xgen_capture_kernel "$id" || xgen_warn "kernel capture incomplete"
     oldcur="$(xgen_current)"
-    # Only a real (frozen) generation can stand in for the new state: the
-    # installer's live generation is the mutable @ subvolume and has no
-    # snapshot of its own, so the first safety generation is always recorded.
-    if [[ "${X_GEN_FORCE:-0}" != "1" && -n "$oldcur" \
+    running="$(xgen_running_id)"
+    # A frozen generation already preserves the state, so an automatic no-op
+    # generation is skipped. The running generation is the exception: its root
+    # mutates in place, so its snapshot is not an immutable pre-transaction
+    # state; always record the safety generation when oldcur == running.
+    local dedupe_ok=1
+    if [[ "$oldcur" == "$running" ]] && xgen_reason_pre_safety "$reason"; then
+        dedupe_ok=0
+    fi
+    if [[ "$dedupe_ok" -eq 1 && "${X_GEN_FORCE:-0}" != "1" && -n "$oldcur" \
         && -d "$(xgen_snapshot_path "$oldcur")" ]] \
         && xgen_reason_dedupes "$reason" && xgen_state_unchanged "$oldcur" "$dir"; then
         rm -rf "$dir"
@@ -890,7 +956,7 @@ xgen_new() {
         printf '%s\n' "$oldcur"
         return 0
     fi
-    parent="$(xgen_running_id)"
+    parent="$running"
     [[ -n "$parent" ]] || parent="$oldcur"
     root_subvol="$(xgen_default_subvol "$id")"
     xgen_write_manifest "$id" "$parent" "$reason" "$label" "$pkg_backend" "$root_subvol"
