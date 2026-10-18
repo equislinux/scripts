@@ -144,7 +144,7 @@ No hay registro central ni paso de registro.
 | `X_GEN_SUBVOL_PREFIX` | `$X_GEN_SNAPSHOTS` | Ruta in-fs usada por mount/opciones de boot. |
 | `X_GEN_ROOT` | `/` | Árbol capturado por una generación (los tests usan una raíz falsa). |
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline del kernel registrado en el manifiesto. |
-| `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `3` | Gestión y retención de entries de boot. |
+| `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `0` | Gestión y retención de entries de boot (`0` = todas). |
 | `X_GEN_KEEP` | `5` | Retención de generaciones para `x gen prune`. |
 | `X_HGEN_STATE` / `X_HGEN_HOME` | `~/.local/share/x/home-gens` / `$HOME` | Store y home capturado de las generaciones de home. |
 | `X_HGEN_INCLUDE` / `X_HGEN_EXCLUDE` | dotfiles + `.config` / `Cache CachedData GPUCache logs` | Rutas capturadas por `x home new`. |

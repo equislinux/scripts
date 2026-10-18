@@ -140,7 +140,7 @@ There is no central registry and no registration step.
 | `X_GEN_SUBVOL_PREFIX` | `$X_GEN_SNAPSHOTS` | In-fs path used by mount/boot options. |
 | `X_GEN_ROOT` | `/` | Tree captured by a generation (tests use a fake root). |
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Kernel cmdline recorded in the manifest. |
-| `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `3` | Boot-entry management and retention. |
+| `X_GEN_BOOT` / `X_GEN_BOOT_DIR` / `X_GEN_BOOT_KEEP` | `auto` / `/boot` / `0` | Boot-entry management and retention (`0` = every generation). |
 | `X_GEN_KEEP` | `5` | Generation retention for `x gen prune`. |
 | `X_HGEN_STATE` / `X_HGEN_HOME` | `~/.local/share/x/home-gens` / `$HOME` | Home-generation store and captured home. |
 | `X_HGEN_INCLUDE` / `X_HGEN_EXCLUDE` | dotfiles + `.config` / `Cache CachedData GPUCache logs` | Paths captured by `x home new`. |

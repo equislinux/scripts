@@ -123,6 +123,29 @@ check "pinned generation survives" test -d "$X_GEN_DIR/0003"
 check "running/default generation survives" test -d "$X_GEN_DIR/0002"
 check "newest generation survives" test -d "$X_GEN_DIR/0005"
 
+echo "== automatic generations skip unchanged state =="
+xgen_current_set 0005
+export X_GEN_RUNNING=0005
+ID="$(xgen_new setup noop)"
+check "unchanged automatic generation is skipped" test "$ID" = "0005"
+check "no generation directory was created" test ! -d "$X_GEN_DIR/0006"
+printf 'kernel-v2\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
+ID="$(xgen_new setup changed)"
+check "changed automatic generation is recorded" test "$ID" = "0006"
+
+echo "== every generation is shown in boot =="
+export X_GEN_BOOT_KEEP=0
+xgen_boot_sync
+for gid in 0002 0003 0005 0006; do
+    check "systemd-boot entry $gid kept" test -f "$SB/x-gen-$gid.conf"
+done
+check "grub lists generation 0002" grep -q -- '--id x-gen-0002' "$GRUB/custom.cfg"
+check "grub lists generation 0005" grep -q -- '--id x-gen-0005' "$GRUB/custom.cfg"
+check "newest generation is the systemd-boot default" \
+    grep -q '^default x-gen-0006.conf' "$X_GEN_BOOT_DIR/loader/loader.conf"
+check "newest generation is the grub default" \
+    grep -q '^set default=x-gen-0006' "$GRUB/custom.cfg"
+
 echo "== CLI =="
 OUT="$(X_GEN_RUNNING=0002 bash "$SRC/bin/x" gen status)"
 check "x gen status via dispatcher" grep -q '^running:    0002' <<< "$OUT"

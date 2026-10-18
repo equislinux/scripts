@@ -176,6 +176,10 @@ install_dir "$STAGE/nvim" "$XCFG/nvim"
 
 rm -rf "$STAGE"
 
+# A nested checkout can leave VCS metadata behind after the per-repo strip
+# (observed with equisdots/shell); the vendored tree must never ship it.
+find "$XCFG" \( -name .git -o -name .github \) -prune -exec rm -rf {} + 2>/dev/null || true
+
 echo "== verify: no .git/.github and the key stack files are present"
 if [[ -n "$(find "$XCFG" \( -name .git -o -name .github \) -print -quit)" ]]; then
     error "vendored tree still contains .git/.github"

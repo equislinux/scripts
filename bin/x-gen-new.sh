@@ -27,7 +27,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+next_id="$(xgen_id_next)"
 id="$(xgen_new "$REASON" "$LABEL")"
+if [[ "$id" != "$next_id" ]]; then
+    xgen_log "no changes since generation $id; nothing recorded"
+    exit 0
+fi
 xgen_log "generation $id recorded (reason: $REASON${LABEL:+, label: $LABEL})"
 if [[ "$(xgen_current)" != "$id" ]]; then
     xgen_log "default boot unchanged; use 'x gen rollback $id' to switch"

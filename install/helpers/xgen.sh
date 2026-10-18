@@ -21,10 +21,11 @@
 #   X_GEN_CMDLINE     kernel cmdline      (default /proc/cmdline)
 #   X_GEN_BOOT        auto|on|off         (default auto: on with btrfs)
 #   X_GEN_BOOT_DIR    boot/ESP dir        (default /boot)
-#   X_GEN_BOOT_KEEP   entries to keep     (default 3)
+#   X_GEN_BOOT_KEEP   entries to keep     (default 0 = every generation)
 #   X_GEN_LIVE_SUBVOL subvol of the live generation (set by the installer: /@)
 #   X_GEN_RUNNING     running generation id (tests; default: from /proc/cmdline)
 #   X_GEN_SKIP        1 disables automatic generations in hooks
+#   X_GEN_FORCE       1 always records, bypassing the no-op skip
 #
 # The `dir` backend copies X_GEN_ROOT into the snapshots dir. It exists for
 # tests and for degraded (non-btrfs) environments; it refuses to copy `/`.
@@ -38,7 +39,9 @@ X_GEN_ROOT="${X_GEN_ROOT:-/}"
 X_GEN_BACKEND="${X_GEN_BACKEND:-auto}"
 X_GEN_BOOT="${X_GEN_BOOT:-auto}"
 X_GEN_BOOT_DIR="${X_GEN_BOOT_DIR:-/boot}"
-X_GEN_BOOT_KEEP="${X_GEN_BOOT_KEEP:-3}"
+# 0 keeps an entry (and its archived kernel) for every generation. Set a
+# positive number to cap the boot menu and free space on a small ESP.
+X_GEN_BOOT_KEEP="${X_GEN_BOOT_KEEP:-0}"
 
 xgen_log() {
     printf '\033[1;36m[x gen]\033[0m %s\n' "$*"
@@ -573,6 +576,13 @@ xgen_boot_sync() {
         xgen_warn "no systemd-boot or GRUB layout in $bootdir; skipping entries"
         return 0
     fi
+    # Every generation keeps an archived kernel on the ESP by default. Warn
+    # before a small ESP fills up; X_GEN_BOOT_KEEP=N caps the menu.
+    local avail_kb
+    avail_kb="$(df -Pk "$bootdir" 2>/dev/null | awk 'NR == 2 {print $4}')"
+    if [[ -n "$avail_kb" ]] && (( avail_kb < 204800 )); then
+        xgen_warn "ESP has only ${avail_kb} KiB free; consider X_GEN_BOOT_KEEP=N or 'x gen prune'"
+    fi
 
     local running cur id
     running="$(xgen_running_id)"
@@ -587,8 +597,13 @@ xgen_boot_sync() {
     local total="${#keep_ids[@]}"
     [[ "$total" -gt 0 ]] || return 0
 
-    local first_keep=$((total - X_GEN_BOOT_KEEP))
-    (( first_keep < 0 )) && first_keep=0
+    # 0 = keep every generation in the boot menu (default). A positive value
+    # keeps the newest N plus the default, running and pinned ones.
+    local first_keep=0
+    if (( X_GEN_BOOT_KEEP > 0 )); then
+        first_keep=$((total - X_GEN_BOOT_KEEP))
+        (( first_keep < 0 )) && first_keep=0
+    fi
 
     local -A keep=()
     keep[$cur]=1
@@ -637,6 +652,7 @@ xgen_boot_sync() {
 
     mkdir -p "$bootdir/x"
     local entries="" cmd title
+    local -A written=()
     for id in "${keep_ids[@]}"; do
         [[ -n "${keep[$id]:-}" ]] || continue
 
@@ -692,8 +708,12 @@ xgen_boot_sync() {
                 fi
                 dest="$bootdir/x/gen-$id${subdir:+/$subdir}"
                 mkdir -p "$dest"
-                cp -a "$(xgen_gen_dir "$id")/boot/$vname" "$dest/$vname"
-                cp -a "$(xgen_gen_dir "$id")/boot/$iname" "$dest/$iname"
+                if ! cp -a "$(xgen_gen_dir "$id")/boot/$vname" "$dest/$vname" 2>/dev/null \
+                    || ! cp -a "$(xgen_gen_dir "$id")/boot/$iname" "$dest/$iname" 2>/dev/null; then
+                    rm -rf "$dest"
+                    xgen_warn "generation $id: cannot copy the $pkgbase kernel to the ESP (no space?); entry skipped"
+                    continue
+                fi
                 lin="/x/gen-$id${subdir:+/$subdir}/$vname"
                 initrd="/x/gen-$id${subdir:+/$subdir}/$iname"
             fi
@@ -721,8 +741,27 @@ menuentry \"$title\" --id x-gen-$id$suffix {
     initrd $initrd
 }"
             fi
+            written[$id]=1
         done
     done
+
+    # A default whose entry could not be written (e.g. no space on the ESP for
+    # the archived kernel) falls back to the newest generation that did get an
+    # entry, so the menu never points at a missing file.
+    if [[ -n "$def" && -z "${written[$def]:-}" ]]; then
+        local j
+        def=""
+        for (( j = ${#bootable_ids[@]} - 1; j >= 0; j-- )); do
+            id="${bootable_ids[j]}"
+            if [[ -n "${written[$id]:-}" ]]; then
+                def="$id"
+                break
+            fi
+        done
+        def_lin=""
+        def_initrd=""
+        def_cmd=""
+    fi
 
     # Prune ESP copies/entries outside the keep set.
     local d
@@ -790,6 +829,34 @@ menuentry \"$title\" --id x-gen-$id$suffix {
 
 # --- generation lifecycle ---------------------------------------------------
 
+# Automatic callers (pacman hooks, x setup, x update, x gen apply) record a
+# generation only when something actually changed: an unchanged transaction
+# would otherwise leave an empty generation in the list and the boot menu.
+xgen_reason_dedupes() {
+    case "$1" in
+        pacman|pacman-pre|setup|update|pre-update|apply) return 0 ;;
+    esac
+    return 1
+}
+
+# True when the captures in $2 describe the same state as generation $1:
+# packages, services, migrations, kernel release and kernel files.
+xgen_state_unchanged() {
+    local id="$1" dir="$2" cur_dir f base
+    cur_dir="$(xgen_gen_dir "$id")"
+    [[ -f "$cur_dir/packages.tsv" ]] || return 1
+    cmp -s "$dir/packages.tsv" "$cur_dir/packages.tsv" || return 1
+    cmp -s "$dir/services.txt" "$cur_dir/services.txt" || return 1
+    cmp -s "$dir/migrations.txt" "$cur_dir/migrations.txt" || return 1
+    [[ "$(xgen_manifest_field "$id" release)" == "$(xgen_kernel_release)" ]] || return 1
+    for f in "$X_GEN_ROOT"/boot/vmlinuz-* "$X_GEN_ROOT"/boot/initramfs-*.img; do
+        [[ -f "$f" ]] || continue
+        base="${f##*/}"
+        cmp -s "$f" "$cur_dir/boot/$base" || return 1
+    done
+    return 0
+}
+
 xgen_new() {
     local reason="${1:-manual}" label="${2:-}"
     local backend id dir pkg_backend parent oldcur root_subvol running
@@ -811,6 +878,18 @@ xgen_new() {
     xgen_capture_migrations "$dir/migrations.txt"
     xgen_capture_kernel "$id" || xgen_warn "kernel capture incomplete"
     oldcur="$(xgen_current)"
+    # Only a real (frozen) generation can stand in for the new state: the
+    # installer's live generation is the mutable @ subvolume and has no
+    # snapshot of its own, so the first safety generation is always recorded.
+    if [[ "${X_GEN_FORCE:-0}" != "1" && -n "$oldcur" \
+        && -d "$(xgen_snapshot_path "$oldcur")" ]] \
+        && xgen_reason_dedupes "$reason" && xgen_state_unchanged "$oldcur" "$dir"; then
+        rm -rf "$dir"
+        # stdout carries the generation id: keep the notice on stderr.
+        xgen_log "no changes since generation $oldcur; generation ($reason) skipped" >&2
+        printf '%s\n' "$oldcur"
+        return 0
+    fi
     parent="$(xgen_running_id)"
     [[ -n "$parent" ]] || parent="$oldcur"
     root_subvol="$(xgen_default_subvol "$id")"

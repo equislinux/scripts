@@ -106,10 +106,14 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
   entry id; the rest get `x-gen-<id>-<pkgbase>`. Frozen kernels are archived
   per pkgbase under `/boot/x/gen-<id>/<pkgbase>/`. Legacy single-kernel
   generations keep the old layout and pair vmlinuz/initramfs by name suffix.
-- The ESP keeps the last `X_GEN_BOOT_KEEP` generations plus the default,
+- By default (`X_GEN_BOOT_KEEP=0`) every generation gets its own menu entry
+  (systemd-boot and GRUB) and its archived kernel stays on the ESP. Set a
+  positive `X_GEN_BOOT_KEEP` to cap the menu at the newest N plus the default,
   running and `pinned` ones; pruning the ESP never deletes the btrfs snapshot
   or the metadata, so any generation can be re-selected later (`rollback`
   recreates its entry and kernel copy on demand).
+- The newest generation is the boot default: `x gen new` records it as
+  `current` and rewrites the loader/GRUB default in the same step.
 - `x gen rollback <id>` creates a pre-rollback **safety** generation, pins the
   target, updates `current`/`pending` and rewrites the boot defaults. `/home`
   is untouched.
@@ -130,6 +134,13 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
 `x gen new` records state and makes the new generation the default boot target
 (the newest generation wins on the next boot). `x gen rollback <id>` still
 overrides the default until the next generation is created.
+
+Automatic callers (`x setup`, `x update`, `x gen apply`, the pacman pre/post
+hooks) skip the generation when packages, services, migrations and the kernel
+are identical to the current one, so a no-op transaction does not leave an
+empty generation in the list or the boot menu. Manual `x gen new`, the
+installer first generation and `pre-rollback`/`pre-update` safety generations
+on a live (mutable) root are always recorded.
 
 ## Export and import
 
@@ -214,7 +225,7 @@ outside `x update`" gap: any manual pacman transaction is captured.
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline recorded in the manifest |
 | `X_GEN_BOOT` | `auto` | `on`/`off`/`auto` (auto: enabled with btrfs) |
 | `X_GEN_BOOT_DIR` | `/boot` | ESP path holding kernels and boot entries |
-| `X_GEN_BOOT_KEEP` | `3` | Generations kept in the boot menu |
+| `X_GEN_BOOT_KEEP` | `0` | Generations kept in the boot menu (`0` = every generation) |
 | `X_GEN_KEEP` | `5` | Generations kept by `x gen prune` (same rules: pinned/running/default) |
 | `X_GEN_QGROUP` | — | Exclusive size limit for `x gen quota init` (e.g. `50G`) |
 | `X_GEN_SIGN_KEY` | — | gpg key id used by `x gen export --sign` |

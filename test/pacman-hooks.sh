@@ -48,10 +48,26 @@ X_GEN_SKIP=1 X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" post
 check "X_GEN_SKIP disables the wrapper" test "$(xgen_id_next)" = "$NEXT"
 
 echo "== wrapper =="
+# A no-op transaction (same packages/services/kernel as the current frozen
+# generation) must not leave an empty generation behind.
+X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" post
+check "no-op post is skipped" test "$(xgen_id_next)" = "0002"
+check "no-op post keeps the current generation" test "$(xgen_current)" = "0001"
+
+mkdir -p "$X_GEN_ROOT/boot"
+printf 'kernel-v2\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
+printf 'initrd-v2\n' > "$X_GEN_ROOT/boot/initramfs-linux.img"
 X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" post
 check "post records a pacman generation" grep -q '"reason": "pacman"' "$X_GEN_DIR/0002/manifest.json"
+
 X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" pre
-check "pre records a safety generation" grep -q '"reason": "pacman-pre"' "$X_GEN_DIR/0003/manifest.json"
+check "no-op pre is skipped" test "$(xgen_id_next)" = "0003"
+
+# A live (mutable) root has no snapshot of its own: the pre hook must always
+# record a safety generation in that case.
+rm -rf "$X_GEN_SNAPSHOTS/$(xgen_current)"
+X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" pre
+check "pre records a safety generation on a live root" grep -q '"reason": "pacman-pre"' "$X_GEN_DIR/0003/manifest.json"
 check "wrapper records through the CLI" test "$(xgen_current)" = "0003"
 
 echo "== hook files =="

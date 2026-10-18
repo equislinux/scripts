@@ -110,10 +110,14 @@ posible si estaba unpinned), limpia el marcador.
   usa `x-gen-<id>-<pkgbase>`. Los kernels congelados se archivan por pkgbase en
   `/boot/x/gen-<id>/<pkgbase>/`. Las generaciones legacy de un solo kernel
   mantienen el layout viejo y emparejan vmlinuz/initramfs por sufijo.
-- El ESP conserva las últimas `X_GEN_BOOT_KEEP` generaciones más la default, la
-  running y las `pinned`; podar el ESP nunca borra el snapshot btrfs ni los
-  metadatos, así que cualquier generación se puede volver a seleccionar
-  (`rollback` recrea su entry y su copia de kernel a demanda).
+- Por defecto (`X_GEN_BOOT_KEEP=0`) **todas** las generaciones tienen su entry
+  (systemd-boot y GRUB) y su kernel archivado en el ESP. Un
+  `X_GEN_BOOT_KEEP` positivo limita el menú a las N más recientes más la
+  default, la running y las `pinned`; podar el ESP nunca borra el snapshot
+  btrfs ni los metadatos, así que cualquier generación se puede volver a
+  seleccionar (`rollback` recrea su entry y su copia de kernel a demanda).
+- La generación más reciente es el default boot: `x gen new` la registra como
+  `current` y reescribe el default del loader/GRUB en el mismo paso.
 - `x gen rollback <id>` crea una generación de **seguridad** pre-rollback,
   marca la objetivo como `pinned`, actualiza `current`/`pending` y reescribe los
   defaults del menú. `/home` no se toca.
@@ -134,6 +138,14 @@ posible si estaba unpinned), limpia el marcador.
 `x gen new` registra estado y fija la generación nueva como default boot (gana
 la más reciente en el próximo arranque). `x gen rollback <id>` sigue pudiendo
 sobreescribirlo hasta que se cree una generación nueva.
+
+Los llamadores automáticos (`x setup`, `x update`, `x gen apply` y los hooks
+pre/post de pacman) omiten la generación cuando paquetes, servicios,
+migraciones y kernel son idénticos a la actual, así que una transacción sin
+cambios no deja una generación vacía en la lista ni en el menú de boot.
+`x gen new` manual, la primera generación del instalador y las generaciones de
+seguridad `pre-rollback`/`pre-update` sobre un root vivo (mutable) siempre se
+registran.
 
 ## Export e import
 
@@ -218,7 +230,7 @@ capturada.
 | `X_GEN_CMDLINE` | `/proc/cmdline` | Cmdline registrado en el manifiesto |
 | `X_GEN_BOOT` | `auto` | `on`/`off`/`auto` (auto: activo con btrfs) |
 | `X_GEN_BOOT_DIR` | `/boot` | Ruta del ESP con kernels y entries |
-| `X_GEN_BOOT_KEEP` | `3` | Generaciones retenidas en el menú de boot |
+| `X_GEN_BOOT_KEEP` | `0` | Generaciones retenidas en el menú de boot (`0` = todas) |
 | `X_GEN_KEEP` | `5` | Generaciones retenidas por `x gen prune` (mismas reglas: pinned/running/default) |
 | `X_GEN_QGROUP` | — | Límite de tamaño exclusivo para `x gen quota init` (p.ej. `50G`) |
 | `X_GEN_SIGN_KEY` | — | Id de clave gpg usada por `x gen export --sign` |
