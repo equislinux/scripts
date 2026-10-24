@@ -27,7 +27,9 @@ end of the installation.
 
 `/var/lib/x` is its own subvolume (`@xstate`) so metadata is shared by every
 generation (it is not captured by the snapshots). The manifest hashes `/etc`
-(`configs.etc_sha256`), so `x gen status` reports drift.
+(`configs.etc_sha256`), so `x gen status` reports drift. Volatile or
+service-managed files are excluded from that hash (`resolv.conf`, `adjtime`,
+the pacman keyring and the libvirt-managed configuration tree).
 
 ## Layout
 
