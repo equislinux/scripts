@@ -173,6 +173,7 @@ xgen_hash_tree() {
             ! -name '.pwd.lock' ! -name 'mtab' ! -name '.updated' \
             ! -name 'resolv.conf' ! -name 'adjtime' \
             ! -path './pacman.d/gnupg/*' \
+            ! -path './libvirt/*' \
             -print0 2>/dev/null \
             | LC_ALL=C sort -z \
             | xargs -0 -r sha256sum \
