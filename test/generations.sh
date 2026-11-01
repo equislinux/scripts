@@ -40,10 +40,11 @@ printf 'initrd\n' > "$X_GEN_ROOT/boot/initramfs-linux.img"
 mkdir -p "$X_GEN_ROOT/home/user/.local/state/x/migrations"
 : > "$X_GEN_ROOT/home/user/.local/state/x/migrations/20260101000000-alpha"
 
-# A pacman transaction lock present at snapshot time must not be frozen into
-# the generation (regression: booting it blocked every later pacman run).
-mkdir -p "$X_GEN_ROOT/var/lib/pacman"
+# Package transaction locks present at snapshot time must not be frozen into
+# the generation (regression: booting it blocked every later run).
+mkdir -p "$X_GEN_ROOT/var/lib/pacman" "$X_GEN_ROOT/var/lib/xpm"
 : > "$X_GEN_ROOT/var/lib/pacman/db.lck"
+: > "$X_GEN_ROOT/var/lib/xpm/transaction.lock"
 
 echo "== creation =="
 ID="$(xgen_new test first)"
@@ -51,7 +52,9 @@ check "first generation is 0001" test "$ID" = "0001"
 check "manifest exists" test -f "$X_GEN_DIR/0001/manifest.json"
 check "snapshot exists" test -f "$X_GEN_SNAPSHOTS/0001/etc/app.conf"
 check "snapshot drops the pacman lock" test ! -e "$X_GEN_SNAPSHOTS/0001/var/lib/pacman/db.lck"
+check "snapshot drops the xpm lock" test ! -e "$X_GEN_SNAPSHOTS/0001/var/lib/xpm/transaction.lock"
 check "live tree keeps its pacman lock" test -f "$X_GEN_ROOT/var/lib/pacman/db.lck"
+check "live tree keeps its xpm lock" test -f "$X_GEN_ROOT/var/lib/xpm/transaction.lock"
 check "current points at 0001" test "$(xgen_current)" = "0001"
 check "manifest records the cmdline" grep -q 'rootflags=subvol=@' "$X_GEN_DIR/0001/manifest.json"
 check "manifest records the kernel release" grep -q '6.9.0-test' "$X_GEN_DIR/0001/manifest.json"
@@ -162,6 +165,25 @@ if ( xgen_restore_pkg nope 0001 "$X_GEN_ROOT" ) >/dev/null 2>&1; then
 else
     check "restore of an unknown package fails" true
 fi
+
+# xpm wins only when its local version matches the generation capture; a
+# stale mirror must not override the pacman entry (do not regress).
+mkdir -p "$X_GEN_SNAPSHOTS/0001/var/lib/xpm/local/foo"
+printf '2.0-1\n' > "$X_GEN_SNAPSHOTS/0001/var/lib/xpm/local/foo/version"
+printf '%%FILES%%\nusr/share/foo/app.conf\n' \
+    > "$X_GEN_SNAPSHOTS/0001/var/lib/xpm/local/foo/files"
+printf 'xpm-snapshot\n' > "$X_GEN_SNAPSHOTS/0001/usr/share/foo/app.conf"
+printf 'live-again\n' > "$X_GEN_ROOT/usr/share/foo/app.conf"
+xgen_restore_pkg foo 0001 "$X_GEN_ROOT" >/dev/null 2>&1
+check "restore prefers xpm when its version matches the generation" \
+    test "$(cat "$X_GEN_ROOT/usr/share/foo/app.conf")" = "xpm-snapshot"
+
+printf '3.0-1\n' > "$X_GEN_SNAPSHOTS/0001/var/lib/xpm/local/foo/version"
+printf 'pacman-snapshot\n' > "$X_GEN_SNAPSHOTS/0001/usr/share/foo/app.conf"
+printf 'live-again\n' > "$X_GEN_ROOT/usr/share/foo/app.conf"
+xgen_restore_pkg foo 0001 "$X_GEN_ROOT" >/dev/null 2>&1
+check "restore ignores a stale xpm mirror and keeps the pacman entry" \
+    test "$(cat "$X_GEN_ROOT/usr/share/foo/app.conf")" = "pacman-snapshot"
 
 echo "== CLI =="
 OUT="$(bash "$SRC/bin/x" gen list)"

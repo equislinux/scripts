@@ -78,7 +78,8 @@ check "post hook runs PostTransaction" grep -q 'When = PostTransaction' "$SRC/ho
 check "post hook sorts after mkinitcpio (kernel files exist when capturing)" \
     test "$(printf '90-mkinitcpio-install.hook\n95-x-gen-post.hook\n' | LC_ALL=C sort | tail -1)" = "95-x-gen-post.hook"
 check "hooks call the wrapper" grep -q '/usr/share/x/hooks/pacman-gen.sh pre' "$SRC/hooks/alpm/10-x-gen-pre.hook"
-check "x update disables the hook (manages its own generations)" grep -q 'X_GEN_SKIP=1 pacman' "$SRC/bin/x-update.sh"
+check "x update disables the hook (manages its own generations)" \
+    grep -q 'X_GEN_SKIP=1 x_pkg_upgrade' "$SRC/bin/x-update.sh"
 check "PKGBUILD ships the alpm hooks" grep -q 'usr/share/libalpm/hooks' "$SRC/packaging/PKGBUILD"
 
 if [[ "$FAIL" -eq 0 ]]; then

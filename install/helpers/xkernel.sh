@@ -4,6 +4,11 @@
 #   X_KERNEL_MODULES_DIR, X_KERNEL_BOOT_DIR, X_KERNEL_KNOWN,
 #   X_KERNEL_RUNNING_RELEASE
 
+if ! declare -F x_pkg_installed >/dev/null 2>&1; then
+    # shellcheck source=pkg.sh
+    source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pkg.sh"
+fi
+
 xkernel_modules_dir() { printf '%s\n' "${X_KERNEL_MODULES_DIR:-/usr/lib/modules}"; }
 xkernel_boot_dir() { printf '%s\n' "${X_KERNEL_BOOT_DIR:-/boot}"; }
 
@@ -55,7 +60,13 @@ xkernel_running_pkgbase() {
     cat "$(xkernel_modules_dir)/$rel/pkgbase" 2>/dev/null || true
 }
 
-xkernel_pkg_installed() { pacman -Qq "$1" >/dev/null 2>&1; }
+xkernel_pkg_installed() {
+    if declare -F x_pkg_installed >/dev/null 2>&1; then
+        x_pkg_installed "$1"
+    else
+        pacman -Qq "$1" >/dev/null 2>&1
+    fi
+}
 
 xkernel_boot_style() {
     local b

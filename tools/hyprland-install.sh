@@ -36,6 +36,7 @@ set -euo pipefail
 #   X_HYPR_KEEP_SRC   1 = keep the temporary equisdots/dots clone
 
 source "$(dirname "${BASH_SOURCE[0]}")/../install/helpers/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../install/helpers/pkg.sh"
 
 if [[ "$(id -u)" -eq 0 ]]; then
     error "hyprland setup must run as the target user, not root"
@@ -200,10 +201,10 @@ AUR=(
 # first so the AUR versions can be installed without conflicts. (The upstream
 # list also names rofi-wayland, which no longer exists: the official rofi 2.x
 # is Wayland-capable and is what this tool installs.)
-root pacman -R --noconfirm quickshell swayosd 2>/dev/null || true
+x_pkg_remove quickshell swayosd 2>/dev/null || true
 
 echo "== official packages"
-root pacman -S --needed --noconfirm "${OFFICIAL[@]}" || warn "some official packages failed"
+x_pkg_install "${OFFICIAL[@]}" || warn "some official packages failed"
 
 if (( ${#AUR[@]} )); then
     HELPER=""
@@ -212,7 +213,7 @@ if (( ${#AUR[@]} )); then
 
     if [[ -z "$HELPER" ]]; then
         echo "== installing yay (as user)"
-        root pacman -S --needed --noconfirm base-devel >/dev/null 2>&1 || true
+        x_pkg_install base-devel >/dev/null 2>&1 || true
         YAY_TMP="$(mktemp -d "$CACHE/yay.XXXXXX")"
         git clone -q https://aur.archlinux.org/yay.git "$YAY_TMP/yay"
         (cd "$YAY_TMP/yay" && makepkg -si --noconfirm) || warn "yay build failed"

@@ -205,7 +205,10 @@ xgen_cmdline() {
 
 xgen_tooling_version() {
     local out=""
-    if command -v pacman >/dev/null 2>&1; then
+    if command -v xpm >/dev/null 2>&1; then
+        out="$(xpm query x-scripts 2>/dev/null | awk '$1 == "x-scripts" {print $2; exit}')" || out=""
+    fi
+    if [[ -z "$out" ]] && command -v pacman >/dev/null 2>&1; then
         out="$(pacman -Q x-scripts 2>/dev/null | awk '{print $2}')" || out=""
     fi
     if [[ -z "$out" && -n "${X_ROOT:-}" ]] && command -v git >/dev/null 2>&1; then
@@ -471,12 +474,13 @@ xgen_snapshot_create() {
             ;;
     esac
 
-    # Runtime locks must not be frozen into a bootable generation: the pacman
-    # hooks snapshot the tree while a transaction holds /var/lib/pacman/db.lck,
-    # and a stale lock inside the booted generation blocks every later pacman
-    # run ("unable to lock database"). The snapshot is a separate tree, so
-    # deleting it here never touches the running transaction.
+    # Runtime locks must not be frozen into a bootable generation: the package
+    # hooks snapshot the tree while xpm or pacman holds its transaction lock,
+    # and a stale lock inside the booted generation blocks every later run.
+    # The snapshot is a separate tree, so deleting the locks here never touches
+    # the running transaction.
     rm -f "$snap/var/lib/pacman/db.lck"
+    rm -f "$snap/var/lib/xpm/transaction.lock"
     return 0
 }
 
@@ -1955,7 +1959,9 @@ xgen_restore() {
 }
 
 # Restores every file of a package using the file list of the package database
-# inside the snapshot (pacman's local db, or xpm's local db).
+# inside the snapshot. When both databases carry the package, xpm wins only if
+# its version matches the generation; otherwise the pacman entry (the previous
+# behavior) is used so a stale mirror cannot regress the restore.
 xgen_restore_pkg() {
     local pkg="$1" id="$2" dest="${3:-}"
     [[ -n "$pkg" && -n "$id" ]] || xgen_die "usage: x gen restore --pkg <name> [--from ID]"
@@ -1963,20 +1969,51 @@ xgen_restore_pkg() {
     xgen_check_state_readable
 
     local snap mnt="" root dbdir files count=0 rel src target prefix
+    local genver="" xpmdir="" xpmver="" pacdir="" alt=""
     snap="$(xgen_snapshot_path "$id")"
     [[ -d "$snap" ]] || xgen_die "generation $id not found ($snap)"
     mnt="$(xgen_snapshot_mount "$id")"
     root="${mnt:-$snap}"
 
-    dbdir="$(find "$root/var/lib/pacman/local" -maxdepth 1 -mindepth 1 -type d -name "$pkg-[0-9]*" 2>/dev/null | LC_ALL=C sort | head -1)" || dbdir=""
-    if [[ -z "$dbdir" && -d "$root/var/lib/xpm/local/$pkg" ]]; then
-        dbdir="$root/var/lib/xpm/local/$pkg"
+    genver="$(awk -v p="$pkg" '$1 == p {print $2; exit}' \
+        "$(xgen_gen_dir "$id")/packages.tsv" 2>/dev/null || true)"
+    if [[ -d "$root/var/lib/xpm/local/$pkg" ]]; then
+        xpmdir="$root/var/lib/xpm/local/$pkg"
+        xpmver="$(head -1 "$xpmdir/version" 2>/dev/null || true)"
+    fi
+    pacdir="$(find "$root/var/lib/pacman/local" -maxdepth 1 -mindepth 1 -type d -name "$pkg-[0-9]*" 2>/dev/null | LC_ALL=C sort | head -1)" || pacdir=""
+
+    if [[ -n "$xpmdir" ]]; then
+        if [[ -z "$pacdir" ]]; then
+            dbdir="$xpmdir"
+        elif [[ -n "$genver" && "$xpmver" == "$genver" ]]; then
+            dbdir="$xpmdir"
+        else
+            dbdir="$pacdir"
+        fi
+    elif [[ -n "$pacdir" ]]; then
+        dbdir="$pacdir"
     fi
     if [[ -z "$dbdir" ]]; then
         xgen_release_mount "$mnt"
         xgen_die "package $pkg not found in generation $id"
     fi
+
+    # A legacy entry can lack its file list: fall back to the other database
+    # instead of failing when it has one.
     files="$dbdir/files"
+    if [[ ! -f "$files" ]]; then
+        if [[ "$dbdir" == "$xpmdir" && -n "$pacdir" && -f "$pacdir/files" ]]; then
+            alt="$pacdir"
+        elif [[ "$dbdir" == "$pacdir" && -n "$xpmdir" && -f "$xpmdir/files" ]]; then
+            alt="$xpmdir"
+        fi
+        if [[ -n "$alt" ]]; then
+            xgen_warn "no file list for $pkg in ${dbdir##*/}; using ${alt##*/}"
+            dbdir="$alt"
+            files="$dbdir/files"
+        fi
+    fi
     if [[ ! -f "$files" ]]; then
         xgen_release_mount "$mnt"
         xgen_die "no file list for package $pkg in generation $id"

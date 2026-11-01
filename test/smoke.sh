@@ -58,6 +58,11 @@ x_sync_config "$CONF" "$DST"
 check "second pass is idempotent (no extra backup)" \
     test "$(find "$DST" -name 'app.conf.bak.*' | wc -l)" = "$BAK_COUNT"
 
+echo "== package helper =="
+if ! bash "$SRC/test/pkg-helper.sh"; then
+    FAIL=1
+fi
+
 echo "== tool hyprland-install =="
 # Fake offline snapshot: the dry-run must resolve it, print the plan and never
 # mutate the caller's tree.

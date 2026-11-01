@@ -15,6 +15,9 @@
 # Removals never happen unless the corresponding `prune = true` is set.
 # Requires xgen.sh to be sourced first.
 
+# shellcheck source=pkg.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pkg.sh"
+
 XSYSTEM_ROOT="${X_GEN_ROOT:-/}"
 
 # --- TOML subset parser -----------------------------------------------------
@@ -269,11 +272,11 @@ xgen_system_apply() {
             done < "$names"
         fi
         if (( ${#missing[@]} > 0 )); then
-            run_privileged pacman -S --needed --noconfirm "${missing[@]}"
+            x_pkg_install "${missing[@]}"
             echo "  installed: ${missing[*]}"
         fi
         if (( ${#extras[@]} > 0 )); then
-            run_privileged pacman -Rns --noconfirm "${extras[@]}"
+            x_pkg_remove --recursive --nosave "${extras[@]}"
             echo "  removed: ${extras[*]}"
         fi
         rm -f "$tmp" "$names"
