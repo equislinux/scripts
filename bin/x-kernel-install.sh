@@ -7,6 +7,14 @@ set -euo pipefail
 X_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$X_ROOT/install/helpers/xkernel.sh"
 source "$X_ROOT/install/helpers/xgen.sh"
+source "$X_ROOT/install/helpers/pkg.sh"
+
+generation() { # reason label
+    local reason="$1" label="$2"
+    [[ "${X_GEN_SKIP:-0}" == "1" ]] && return 0
+    xgen_supported || return 0
+    xgen_new "$reason" "$label" >/dev/null || xgen_warn "generation ($reason) failed"
+}
 
 HEADERS=1
 YES=0
@@ -19,8 +27,9 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo "usage: x kernel install <kernel>... [--no-headers] [--yes]"
             echo "  kernels: $(xkernel_known | tr '\n' ' ')"
-            echo "  installs the kernel (+ matching headers) through pacman; the"
-            echo "  generation hooks snapshot it automatically."
+            echo "  installs the kernel (+ matching headers) through xpm or pacman;"
+            echo "  the kernel preset, module deps and initramfs are refreshed and"
+            echo "  one generation is recorded."
             exit 0
             ;;
         -*) echo "x kernel install: unknown option '$1'" >&2; exit 1 ;;
@@ -38,7 +47,7 @@ for k in "${names[@]}"; do
     fi
     pkgs+=("$k")
     if [[ "$HEADERS" -eq 1 ]]; then
-        if pacman -Si "$k-headers" >/dev/null 2>&1; then
+        if x_pkg_available_pkg "$k-headers"; then
             pkgs+=("$k-headers")
         else
             echo "x kernel: warning: '$k-headers' not available; installing without headers" >&2
@@ -46,13 +55,23 @@ for k in "${names[@]}"; do
     fi
 done
 
-opts=(--needed)
-[[ "$YES" -eq 1 ]] && opts+=(--noconfirm)
-pacman -S "${opts[@]}" "${pkgs[@]}"
+# --yes is kept for CLI compatibility: the helper transactions are always
+# non-interactive (--no-confirm/--noconfirm).
+X_GEN_SKIP=1 x_pkg_install "${pkgs[@]}"
+if [[ "${X_PKG_LAST_BACKEND:-}" == "xpm" ]]; then
+    x_pkg_sync_mirror || true
+fi
+
+for k in "${names[@]}"; do
+    x_pkg_ensure_mkinitcpio_preset "$k" || true
+done
+x_pkg_kernel_finalize || true
 
 echo
 for k in "${names[@]}"; do
     echo "x kernel: installed $k ($(xkernel_release_of_pkgbase "$k" || echo unknown))"
 done
+
+generation "kernel-install" "kernel: ${names[*]}"
 echo "x kernel: boot entries refreshed by the generation hooks (see: x gen list)"
 echo "x kernel: reboot and pick the new entry, or keep booting the current kernel"

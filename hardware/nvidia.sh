@@ -26,6 +26,8 @@ run_privileged() {
     fi
 }
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/install/helpers/pkg.sh"
+
 # -------------------------------------------------------------------------
 # PRE-FLIGHT CHECKS
 # -------------------------------------------------------------------------
@@ -43,9 +45,9 @@ fi
 # 1. REMOVE OPEN-SOURCE DRIVERS
 # -------------------------------------------------------------------------
 
-if pacman -Q vulkan-nouveau xf86-video-nouveau &>/dev/null; then
+if x_pkg_installed vulkan-nouveau || x_pkg_installed xf86-video-nouveau; then
     log "Removing open-source drivers (nouveau)..."
-    run_privileged pacman -Rns --noconfirm vulkan-nouveau xf86-video-nouveau || true
+    x_pkg_remove --recursive --nosave vulkan-nouveau xf86-video-nouveau || true
 fi
 
 # -------------------------------------------------------------------------
@@ -59,7 +61,7 @@ if [ "$MULTILIB_ENABLED" = true ]; then
 fi
 
 log "Installing NVIDIA packages: $PACKAGES"
-run_privileged pacman -S --noconfirm --needed $PACKAGES
+x_pkg_install $PACKAGES
 
 # -------------------------------------------------------------------------
 # 3. CONFIGURE MKINITCPIO (EARLY LOADING)

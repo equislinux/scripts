@@ -19,6 +19,8 @@ run_privileged() {
     fi
 }
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/install/helpers/pkg.sh"
+
 # -------------------------------------------------------------------------
 # 1. INSTALL PACKAGES
 # -------------------------------------------------------------------------
@@ -46,7 +48,7 @@ PKGS=(
 )
 
 log "Installing packages: ${PKGS[*]}"
-run_privileged pacman -S --needed --noconfirm "${PKGS[@]}"
+x_pkg_install "${PKGS[@]}"
 
 # -------------------------------------------------------------------------
 # 2. CONFIGURE LIBVIRT

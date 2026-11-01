@@ -6,6 +6,30 @@ set -euo pipefail
 
 X_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$X_ROOT/install/helpers/xkernel.sh"
+source "$X_ROOT/install/helpers/xgen.sh"
+source "$X_ROOT/install/helpers/pkg.sh"
+
+generation() { # reason label
+    local reason="$1" label="$2"
+    [[ "${X_GEN_SKIP:-0}" == "1" ]] && return 0
+    xgen_supported || return 0
+    xgen_new "$reason" "$label" >/dev/null || xgen_warn "generation ($reason) failed"
+}
+
+# Removes a stale /boot file only when no other package owns it.
+remove_kernel_file() { # pkgbase file
+    local pkgbase="$1" file="$2" owner
+    [[ -e "$file" || -L "$file" ]] || return 0
+    owner="$(x_pkg_owner "$file" 2>/dev/null || true)"
+    if [[ -n "$owner" && "$owner" != "$pkgbase" && "$owner" != "$pkgbase-headers" ]]; then
+        xgen_warn "keeping $file (owned by $owner)"
+        return 0
+    fi
+    if ! x_pkg_run rm -f "$file"; then
+        xgen_warn "could not remove $file"
+    fi
+    return 0
+}
 
 YES=0
 name=""
@@ -28,15 +52,28 @@ done
 xkernel_check_removable "$name" || exit 1
 
 pkgs=("$name")
-if xkernel_pkg_installed "$name-headers"; then
+if x_pkg_installed "$name-headers"; then
     pkgs+=("$name-headers")
 fi
 
-opts=()
-[[ "$YES" -eq 1 ]] && opts+=(--noconfirm)
-pacman -R "${opts[@]}" "${pkgs[@]}"
+# --yes is kept for CLI compatibility: the helper transactions are always
+# non-interactive. Match the previous `pacman -R` behavior (keep deps and
+# configuration files).
+X_GEN_SKIP=1 x_pkg_remove "${pkgs[@]}"
+if [[ "${X_PKG_LAST_BACKEND:-}" == "xpm" ]]; then
+    x_pkg_sync_mirror || true
+fi
+
+x_pkg_remove_mkinitcpio_preset "$name" || true
+boot_dir="$(xkernel_boot_dir)"
+remove_kernel_file "$name" "$boot_dir/vmlinuz-$name"
+remove_kernel_file "$name" "$boot_dir/initramfs-$name.img"
+remove_kernel_file "$name" "$boot_dir/initramfs-$name-fallback.img"
+x_pkg_mkinitcpio || true
+
+generation "kernel-remove" "kernel: $name"
 
 echo
 echo "x kernel: removed $name (and its headers when present)"
 echo "x kernel: older snapshots that archived $name stay bootable via rollback"
-echo "x kernel: boot entries refreshed by the generation hooks (see: x gen list)"
+echo "x kernel: boot entries and remaining kernels refreshed (see: x gen list)"

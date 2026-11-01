@@ -48,6 +48,7 @@ else
         usr/share/x/install/helpers/xgen.sh \
         usr/share/x/install/helpers/xgen-home.sh \
         usr/share/x/install/helpers/xgen-system.sh \
+        usr/share/x/install/helpers/pkg.sh \
         usr/share/x/bin/x-gen-new.sh \
         usr/share/x/bin/x-gen-boot.sh \
         usr/share/x/bin/x-home-new.sh \
