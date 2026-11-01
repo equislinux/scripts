@@ -216,15 +216,33 @@ xgen_tooling_version() {
 }
 
 xgen_capture_packages() {
-    local out="$1" backend="none"
+    local out="$1" backend="none" xpm_out merged
     : > "$out"
-    if command -v pacman >/dev/null 2>&1; then
-        backend="pacman"
-        pacman -Q 2>/dev/null | LC_ALL=C sort > "$out" || true
-    elif command -v xpm >/dev/null 2>&1; then
-        backend="xpm"
-        xpm query 2>/dev/null | LC_ALL=C sort > "$out" || true
+
+    # xpm takes precedence for package names it knows: after a migration its
+    # database is authoritative, while pacman may still carry stale versions
+    # for packages managed by xpm.
+    if command -v xpm >/dev/null 2>&1; then
+        xpm_out="${out}.xpm.$$"
+        if xpm query 2>/dev/null > "$xpm_out" && [[ -s "$xpm_out" ]]; then
+            cat "$xpm_out" >> "$out"
+            backend="xpm"
+        fi
+        rm -f "$xpm_out"
     fi
+
+    if command -v pacman >/dev/null 2>&1; then
+        pacman -Q 2>/dev/null >> "$out" || true
+        if [[ "$backend" == "xpm" ]]; then
+            backend="pacman+xpm"
+        else
+            backend="pacman"
+        fi
+    fi
+
+    merged="${out}.merged.$$"
+    awk 'NF && !seen[$1]++' "$out" | LC_ALL=C sort > "$merged" || true
+    mv -f "$merged" "$out"
     printf '%s\n' "$backend"
 }
 
