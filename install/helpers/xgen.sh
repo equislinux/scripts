@@ -171,7 +171,7 @@ xgen_hash_tree() {
         cd "$dir" || exit 1
         find . -xdev -type f \
             ! -name '.pwd.lock' ! -name 'mtab' ! -name '.updated' \
-            ! -name 'resolv.conf' ! -name 'adjtime' \
+            ! -name 'resolv.conf' ! -name 'adjtime' ! -name 'ld.so.cache' \
             ! -path './pacman.d/gnupg/*' \
             ! -path './libvirt/*' \
             -print0 2>/dev/null \
