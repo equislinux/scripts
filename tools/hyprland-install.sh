@@ -208,11 +208,17 @@ x_pkg_install "${OFFICIAL[@]}" || warn "some official packages failed"
 
 if (( ${#AUR[@]} )); then
     HELPER=""
-    has_cmd yay && HELPER="yay"
-    has_cmd paru && HELPER="paru"
+    has_cmd xpm-aur && HELPER="xpm-aur"
+    if [[ -z "$HELPER" ]]; then
+        echo "== installing xpm-aur (as root, transactions through xpm)"
+        x_pkg_install xpm-aur || warn "xpm-aur installation failed"
+        has_cmd xpm-aur && HELPER="xpm-aur"
+    fi
+    [[ -z "$HELPER" ]] && has_cmd yay && HELPER="yay"
+    [[ -z "$HELPER" ]] && has_cmd paru && HELPER="paru"
 
     if [[ -z "$HELPER" ]]; then
-        echo "== installing yay (as user)"
+        echo "== installing yay (fallback, as user)"
         x_pkg_install base-devel >/dev/null 2>&1 || true
         YAY_TMP="$(mktemp -d "$CACHE/yay.XXXXXX")"
         git clone -q https://aur.archlinux.org/yay.git "$YAY_TMP/yay"
@@ -488,8 +494,9 @@ if has_cmd lspci && lspci 2>/dev/null | grep -qiE 'vga.*nvidia|3d.*nvidia'; then
         bash "$HYPR_SRC/install.sh" --nvidia-only -y || warn "NVIDIA fallback failed; run: sudo bash $HYPR_SRC/install.sh --nvidia-only"
     elif ! has_cmd envycontrol; then
         GPU_HELPER=""
-        has_cmd yay && GPU_HELPER="yay"
-        has_cmd paru && GPU_HELPER="paru"
+        has_cmd xpm-aur && GPU_HELPER="xpm-aur"
+        [[ -z "$GPU_HELPER" ]] && has_cmd yay && GPU_HELPER="yay"
+        [[ -z "$GPU_HELPER" ]] && has_cmd paru && GPU_HELPER="paru"
         if [[ -n "$GPU_HELPER" ]]; then
             log "NVIDIA: installing envycontrol (gpu-mode.sh)"
             "$GPU_HELPER" -S --needed --noconfirm envycontrol || warn "envycontrol installation failed"
