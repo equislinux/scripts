@@ -1,7 +1,7 @@
 # Maintainer: Xscriptor <dev@xscriptor.com>
 pkgname=x-scripts
 pkgver=0.1.0
-pkgrel=44
+pkgrel=45
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
 url="https://github.com/equislinux/scripts"
@@ -31,16 +31,6 @@ package() {
     # initramfs of a new kernel exists).
     install -d "$pkgdir/usr/share/libalpm/hooks"
     install -m644 "$startdir/../hooks/alpm/"*.hook "$pkgdir/usr/share/libalpm/hooks/"
-
-    # Offline desktop snapshot (equisdots stack + kitty/starship/nvim)
-    # produced by vendor-config.sh. When present it is merged into
-    # /usr/share/x/config so tools/hyprland-install.sh can deploy the whole
-    # equisdots desktop without cloning external repos. No remote source=()
-    # entries: the snapshot is vendored in-repo, not fetched at build time.
-    if [[ -d "$startdir/.vendor/x-config" ]]; then
-        install -d "$dest/config"
-        cp -a "$startdir/.vendor/x-config/." "$dest/config/"
-    fi
 
     find "$dest/bin" "$dest/install" "$dest/hardware" "$dest/tools" "$dest/hooks" -type f \( -name '*.sh' -o -name 'x' \) -exec chmod +x {} +
 
