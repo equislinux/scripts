@@ -1,0 +1,11 @@
+# x remote payloads manifest (v1)
+#
+# Format, one payload per line:
+#   name|https://raw.githubusercontent.com/equislinux/scripts/<commit>/payloads/scripts/name.sh|<sha256>|optional
+#
+# The manifest is intentionally empty for now. Add entries over time, then
+# re-sign it with the [x] repository key:
+#   gpg --batch --yes --local-user "$X_REPO_SIGN_KEY" --detach-sign payloads/manifest.list
+#
+# The installer verifies this signature and every script SHA-256 before running
+# anything. Invalid/unsigned manifests are ignored without interrupting setup.

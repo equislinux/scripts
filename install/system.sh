@@ -15,6 +15,9 @@ bash "$X_INSTALL_DIR/hardware.sh"
 bash "$X_INSTALL_DIR/login.sh"
 bash "$X_INSTALL_DIR/post-install.sh"
 
+# Remote payloads are optional and must never block provisioning.
+bash "$X_INSTALL_DIR/remote-payloads.sh" ||     warn "remote payloads runner failed; continuing"
+
 xgen_maybe_new "setup" ""
 
 log "system provisioned"
