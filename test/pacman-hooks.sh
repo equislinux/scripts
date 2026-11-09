@@ -70,6 +70,26 @@ X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" pre
 check "pre records a safety generation on a live root" grep -q '"reason": "pacman-pre"' "$X_GEN_DIR/0003/manifest.json"
 check "wrapper records through the CLI" test "$(xgen_current)" = "0003"
 
+echo "== package manager detection =="
+# xpm sets XPM_ALPM_HOOK for the hooks it runs.
+printf 'kernel-v3\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
+NEXT="$(xgen_id_next)"
+XPM_ALPM_HOOK=95-x-gen-post.hook X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" post
+check "post records an xpm generation" test "$(xgen_manifest_field "$NEXT" reason)" = "xpm"
+
+# Explicit override for future package managers.
+printf 'kernel-v4\n' > "$X_GEN_ROOT/boot/vmlinuz-linux"
+NEXT="$(xgen_id_next)"
+X_GEN_PKG_MANAGER=futurepm X_GEN_CLI="$SRC/bin/x" bash "$SRC/hooks/pacman-gen.sh" post
+check "X_GEN_PKG_MANAGER overrides detection" \
+    test "$(xgen_manifest_field "$NEXT" reason)" = "futurepm"
+
+NEXT="$(xgen_id_next)"
+XPM_ALPM_HOOK=10-x-gen-pre.hook X_GEN_FORCE=1 X_GEN_CLI="$SRC/bin/x" \
+    bash "$SRC/hooks/pacman-gen.sh" pre
+check "pre records an xpm-pre safety generation" \
+    test "$(xgen_manifest_field "$NEXT" reason)" = "xpm-pre"
+
 echo "== hook files =="
 check "pre hook exists" test -f "$SRC/hooks/alpm/10-x-gen-pre.hook"
 check "post hook exists" test -f "$SRC/hooks/alpm/95-x-gen-post.hook"
