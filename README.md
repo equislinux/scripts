@@ -34,7 +34,7 @@ X_NODE=1 bash install/user.sh
 
 ## Status
 
-Active. The payload ships as `x-scripts` (0.1.0-36) in the `[x]` repository and
+Active. The payload ships as `x-scripts` (0.1.0-48) in the `[x]` repository and
 reaches installed systems with `x update`; the CLI and modules above are the
 current surface. Documentation: https://github.com/equislinux/wiki
 

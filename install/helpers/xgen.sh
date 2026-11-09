@@ -902,12 +902,15 @@ menuentry \"$title\" --id x-gen-$id$suffix {
 
 # --- generation lifecycle ---------------------------------------------------
 
-# Automatic callers (pacman hooks, x setup, x update, x gen apply) record a
-# generation only when something actually changed: an unchanged transaction
-# would otherwise leave an empty generation in the list and the boot menu.
+# Automatic callers (package-manager hooks, x setup, x update, x gen apply)
+# record a generation only when something actually changed: an unchanged
+# transaction would otherwise leave an empty generation in the list and the
+# boot menu. Package-manager hooks use `<manager>` / `<manager>-pre`
+# (pacman, xpm, or a future backend).
 xgen_reason_dedupes() {
     case "$1" in
-        pacman|pacman-pre|setup|update|pre-update|apply) return 0 ;;
+        pacman|xpm|setup|update|pre-update|apply) return 0 ;;
+        *-pre) return 0 ;;
     esac
     return 1
 }
@@ -917,7 +920,8 @@ xgen_reason_dedupes() {
 # its snapshot is not an immutable pre-transaction restore point.
 xgen_reason_pre_safety() {
     case "$1" in
-        pacman-pre|pre-update) return 0 ;;
+        pre-update) return 0 ;;
+        *-pre) return 0 ;;
     esac
     return 1
 }

@@ -70,7 +70,7 @@ for offline use. See `hyprland.md` and ADR-0005.
 ## Status
 
 This repo's deliverables are tracked on **`main`**; the payload is published as
-`x-scripts` (0.1.0-36) in the `[x]` repository and reaches installed systems
+`x-scripts` (0.1.0-48) in the `[x]` repository and reaches installed systems
 with `x update`. Remaining audit items: `x-base.packages` without a consumer,
 CLI polish and more coverage for the helpers/phases.
 

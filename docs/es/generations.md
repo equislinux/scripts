@@ -131,9 +131,10 @@ posible si estaba unpinned), limpia el marcador.
 ## Creación automática
 
 - `x setup` (fases de sistema) termina con una generación (`reason: setup`).
-- `x update` crea una generación de **seguridad pre-update**, corre
-  `pacman -Syu` + migraciones y registra una segunda generación (`reason:
-  update`). Si pacman falla, la de seguridad queda para recuperar.
+- `x update` crea una generación de **seguridad pre-update**, ejecuta la
+  actualización del gestor (`xpm upgrade`, o `pacman -Syu` si xpm no está
+  inicializado) + migraciones y registra una segunda generación (`reason:
+  update`). Si la actualización falla, la de seguridad queda para recuperar.
 - Durante la instalación, `x setup` corre con `X_GEN_SKIP=1`; el instalador
   crea la generación `0001` (`reason: install`, subvol vivo `/@`) después del
   bootloader, con `X_GEN_LIVE_SUBVOL=/@`.
@@ -143,11 +144,12 @@ la más reciente en el próximo arranque). `x gen rollback <id>` sigue pudiendo
 sobreescribirlo hasta que se cree una generación nueva.
 
 Los llamadores automáticos (`x setup`, `x update`, `x gen apply` y los hooks
-pre/post de pacman) omiten la generación cuando paquetes, servicios,
+pre/post del gestor de paquetes) omiten la generación cuando paquetes, servicios,
 migraciones y kernel son idénticos a la actual, así que una transacción sin
 cambios no deja una generación vacía en la lista ni en el menú de boot.
 `x gen new` manual, la primera generación del instalador y `pre-rollback`
-siempre se registran; la seguridad `pacman-pre`/`pre-update` se registra
+siempre se registran; la seguridad `<gestor>-pre`/`pre-update` (p. ej.
+`pacman-pre` o `xpm-pre`) se registra
 siempre que la generación actual sea la running (su root mutable no queda
 respaldado por el snapshot hasta que termina la transacción).
 
@@ -204,21 +206,22 @@ Store: `~/.local/share/x/home-gens/<id>/` con `manifest.json`, `files/`
 `logs` en cualquier parte del árbol. Las rutas se validan para que un restore
 nunca escape del home.
 
-## Transacciones de pacman
+## Transacciones del gestor de paquetes
 
-El paquete `x-scripts` instala dos hooks de pacman:
+El paquete `x-scripts` instala dos hooks ALPM, compartidos por pacman y xpm:
 
 | Hook | Cuándo | Efecto |
 |------|--------|--------|
-| `/usr/share/libalpm/hooks/10-x-gen-pre.hook` | PreTransaction | Generación de seguridad (`reason: pacman-pre`) |
-| `/usr/share/libalpm/hooks/95-x-gen-post.hook` | PostTransaction | Registra el resultado (`reason: pacman`); ordena después de `90-mkinitcpio-*` para capturar kernels nuevos con su initramfs |
+| `/usr/share/libalpm/hooks/10-x-gen-pre.hook` | PreTransaction | Generación de seguridad (`reason: <gestor>-pre`, p. ej. `xpm-pre` o `pacman-pre`) |
+| `/usr/share/libalpm/hooks/95-x-gen-post.hook` | PostTransaction | Registra el resultado (`reason: <gestor>`, p. ej. `xpm` o `pacman`); ordena después de `90-mkinitcpio-*` para capturar kernels nuevos con su initramfs |
 
-Ambos llaman a `/usr/share/x/hooks/pacman-gen.sh`, que es no-op cuando todavía
-no hay generación actual (instalador/pacstrap), en sistemas no-btrfs o cuando
-`X_GEN_SKIP=1` — justo lo que `x update` setea en su propio `pacman -Syu` para
-manejar él mismo sus generaciones pre/post. Esto cierra el hueco de "kernel
-actualizado fuera de `x update`": toda transacción manual de pacman queda
-capturada.
+Ambos llaman a `/usr/share/x/hooks/pacman-gen.sh`, que registra el gestor que
+invocó el hook (`xpm` vía `XPM_ALPM_HOOK`, `pacman` vía el proceso padre, o
+`X_GEN_PKG_MANAGER` como override), y es no-op cuando todavía no hay generación
+actual (instalador/pacstrap), en sistemas no-btrfs o cuando `X_GEN_SKIP=1` —
+justo lo que `x update` setea en su propia actualización para manejar él mismo
+sus generaciones pre/post. Esto cierra el hueco de "kernel actualizado fuera de
+`x update`": toda transacción manual de pacman o xpm queda capturada.
 
 ## Backends y entorno
 

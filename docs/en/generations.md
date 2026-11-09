@@ -128,9 +128,10 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
 ## Automatic creation
 
 - `x setup` (system phases) ends with a generation (`reason: setup`).
-- `x update` creates a **pre-update safety** generation, runs `pacman -Syu` +
-  migrations, and records a second generation (`reason: update`). If pacman
-  fails, the safety generation is kept for recovery.
+- `x update` creates a **pre-update safety** generation, runs the package-manager
+  upgrade (`xpm upgrade`, or `pacman -Syu` when xpm is not initialized) plus
+  migrations, and records a second generation (`reason: update`). If the
+  upgrade fails, the safety generation is kept for recovery.
 - During the installer, `x setup` runs with `X_GEN_SKIP=1`; the installer
   creates generation `0001` (`reason: install`, live subvol `/@`) after the
   bootloader step, with `X_GEN_LIVE_SUBVOL=/@`.
@@ -139,14 +140,15 @@ the `pending` target (only possible if it was unpinned), the marker is cleared.
 (the newest generation wins on the next boot). `x gen rollback <id>` still
 overrides the default until the next generation is created.
 
-Automatic callers (`x setup`, `x update`, `x gen apply`, the pacman pre/post
-hooks) skip the generation when packages, services, migrations and the kernel
-are identical to the current one, so a no-op transaction does not leave an
-empty generation in the list or the boot menu. Manual `x gen new`, the
-installer first generation and `pre-rollback` are always recorded; the
-`pacman-pre`/`pre-update` safety generation is always recorded when the
-current generation is the running one (its mutable root is not replaced by
-the snapshot until the transaction finishes).
+Automatic callers (`x setup`, `x update`, `x gen apply`, the package-manager
+pre/post hooks) skip the generation when packages, services, migrations and
+the kernel are identical to the current one, so a no-op transaction does not
+leave an empty generation in the list or the boot menu. Manual `x gen new`,
+the installer first generation and `pre-rollback` are always recorded; the
+`<manager>-pre`/`pre-update` safety generation (e.g. `pacman-pre` or
+`xpm-pre`) is always recorded when the current generation is the running one
+(its mutable root is not replaced by the snapshot until the transaction
+finishes).
 
 ## Export and import
 
@@ -202,20 +204,22 @@ Store: `~/.local/share/x/home-gens/<id>/` with `manifest.json`, `files/`
 skipped anywhere in the tree. Paths are validated so a restore can never
 escape the home.
 
-## Pacman transactions
+## Package-manager transactions
 
-The `x-scripts` package ships two pacman hooks:
+The `x-scripts` package ships two ALPM hooks, shared by pacman and xpm:
 
 | Hook | When | Effect |
 |------|------|--------|
-| `/usr/share/libalpm/hooks/10-x-gen-pre.hook` | PreTransaction | Safety generation (`reason: pacman-pre`) |
-| `/usr/share/libalpm/hooks/95-x-gen-post.hook` | PostTransaction | Records the result (`reason: pacman`); sorts after `90-mkinitcpio-*` so new kernels are captured with their initramfs |
+| `/usr/share/libalpm/hooks/10-x-gen-pre.hook` | PreTransaction | Safety generation (`reason: <manager>-pre`, e.g. `xpm-pre` or `pacman-pre`) |
+| `/usr/share/libalpm/hooks/95-x-gen-post.hook` | PostTransaction | Records the result (`reason: <manager>`, e.g. `xpm` or `pacman`); sorts after `90-mkinitcpio-*` so new kernels are captured with their initramfs |
 
-Both call `/usr/share/x/hooks/pacman-gen.sh`, which is a no-op when there is no
-current generation yet (installer/pacstrap), on non-btrfs systems, or when
-`X_GEN_SKIP=1` — exactly what `x update` sets on its own `pacman -Syu` call so
-it can manage its pre/post generations itself. This closes the "kernel updated
-outside `x update`" gap: any manual pacman transaction is captured.
+Both call `/usr/share/x/hooks/pacman-gen.sh`, which records the manager that
+invoked the hook (`xpm` via `XPM_ALPM_HOOK`, `pacman` via the parent process,
+or `X_GEN_PKG_MANAGER` as an override), and is a no-op when there is no current
+generation yet (installer/pacstrap), on non-btrfs systems, or when
+`X_GEN_SKIP=1` — exactly what `x update` sets on its own upgrade call so it can
+manage its pre/post generations itself. This closes the "kernel updated outside
+`x update`" gap: any manual pacman or xpm transaction is captured.
 
 ## Backends and environment
 
