@@ -71,7 +71,7 @@ para uso offline. Ver `hyprland.md` y ADR-0005.
 ## Rama y estado
 
 Los entregables de este repo se trackean en **`main`**; el payload se publica
-como `x-scripts` (0.1.0-36) en el repositorio `[x]` y llega a los sistemas
+como `x-scripts` (0.1.0-48) en el repositorio `[x]` y llega a los sistemas
 instalados con `x update`. Restos de auditoría pendientes: `x-base.packages`
 sin consumidor, pulido de CLI y más cobertura de los helpers/fases.
 
