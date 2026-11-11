@@ -159,16 +159,30 @@ fi
 # job per core. Limit the jobs on low-RAM machines so the install does not get
 # OOM-killed halfway. 8 GB guests still OOMed with one job per core, so the
 # -j2 band covers up to 10 GB.
+AUR_JOBS=1
 if [[ -r /proc/meminfo ]]; then
     MEM_MB="$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)"
     if (( MEM_MB < 6000 )); then
         export MAKEFLAGS="-j1"
         export CARGO_BUILD_JOBS=1
+        AUR_JOBS=1
         log "low RAM (${MEM_MB} MB): limiting AUR build jobs to 1"
-    elif (( MEM_MB < 10000 )); then
+    elif (( MEM_MB < 9000 )); then
         export MAKEFLAGS="-j2"
         export CARGO_BUILD_JOBS=2
-        log "low RAM (${MEM_MB} MB): limiting AUR build jobs to 2"
+        AUR_JOBS=1
+        log "low RAM (${MEM_MB} MB): one AUR build at a time (-j2)"
+    elif (( MEM_MB < 14000 )); then
+        # Two independent source builds at -j2 each fit in the 9-14 GB band.
+        export MAKEFLAGS="-j2"
+        export CARGO_BUILD_JOBS=2
+        AUR_JOBS=2
+        log "RAM ${MEM_MB} MB: building up to 2 AUR bases in parallel (-j2 each)"
+    else
+        export MAKEFLAGS="-j2"
+        export CARGO_BUILD_JOBS=2
+        AUR_JOBS=3
+        log "RAM ${MEM_MB} MB: building up to 3 AUR bases in parallel (-j2 each)"
     fi
 fi
 
@@ -228,10 +242,15 @@ if (( ${#AUR[@]} )); then
     fi
 
     if [[ -n "$HELPER" ]]; then
-        for p in "${AUR[@]}"; do
-            echo "== aur: $p ($HELPER)"
-            "$HELPER" -S --needed --noconfirm "$p" || warn "aur package $p failed"
-        done
+        # Hand the whole set to the helper in one transaction. xpm-aur can
+        # build independent AUR bases concurrently (and resolve their shared
+        # dependencies once) instead of paying a chroot bootstrap per package.
+        echo "== aur: ${#AUR[@]} package(s) with $HELPER (jobs: $AUR_JOBS)"
+        if [[ "$HELPER" == "xpm-aur" ]]; then
+            "$HELPER" -j "$AUR_JOBS" -S --needed --noconfirm "${AUR[@]}" ||                 warn "some AUR packages failed"
+        else
+            "$HELPER" -S --needed --noconfirm "${AUR[@]}" ||                 warn "some AUR packages failed"
+        fi
     else
         warn "no AUR helper available; AUR packages skipped"
     fi
