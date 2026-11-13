@@ -57,7 +57,7 @@ done
 
 # --yes is kept for CLI compatibility: the helper transactions are always
 # non-interactive (--no-confirm/--noconfirm).
-X_GEN_SKIP=1 x_pkg_install "${pkgs[@]}"
+X_GEN_SKIP=1 X_PKG_NO_ALPM_HOOKS=1 x_pkg_install "${pkgs[@]}"
 if [[ "${X_PKG_LAST_BACKEND:-}" == "xpm" ]]; then
     x_pkg_sync_mirror || true
 fi

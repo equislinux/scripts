@@ -234,13 +234,12 @@ xgen_capture_packages() {
         rm -f "$xpm_out"
     fi
 
-    if command -v pacman >/dev/null 2>&1; then
+    # In the xpm-native flow pacman must not be queried at all. If xpm has a
+    # usable database it is authoritative; pacman is used only when xpm is not
+    # available (the explicit pacman backend / fallback path).
+    if [[ "$backend" != "xpm" ]] && command -v pacman >/dev/null 2>&1; then
         pacman -Q 2>/dev/null >> "$out" || true
-        if [[ "$backend" == "xpm" ]]; then
-            backend="pacman+xpm"
-        else
-            backend="pacman"
-        fi
+        backend="pacman"
     fi
 
     merged="${out}.merged.$$"
