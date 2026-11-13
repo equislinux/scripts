@@ -91,7 +91,11 @@ x_pkg_install() {
     local backend
     backend="$(x_pkg_backend)"
     case "$backend" in
-        xpm)    x_pkg_run xpm install --needed --no-confirm "$@" ;;
+        xpm)
+            local -a flags=()
+            [[ "${X_PKG_NO_ALPM_HOOKS:-0}" == "1" ]] && flags+=(--no-alpm-hooks)
+            x_pkg_run xpm "${flags[@]}" install --needed --no-confirm "$@"
+            ;;
         pacman) x_pkg_run pacman -S --needed --noconfirm "$@" ;;
         *)      x_pkg_die "no package manager (xpm/pacman) found" ;;
     esac
@@ -127,7 +131,11 @@ x_pkg_remove() {
     local backend
     backend="$(x_pkg_backend)"
     case "$backend" in
-        xpm)    x_pkg_run xpm remove --no-confirm "${xflags[@]}" "${pkgs[@]}" ;;
+        xpm)
+            local -a prefix=()
+            [[ "${X_PKG_NO_ALPM_HOOKS:-0}" == "1" ]] && prefix+=(--no-alpm-hooks)
+            x_pkg_run xpm "${prefix[@]}" remove --no-confirm "${xflags[@]}" "${pkgs[@]}"
+            ;;
         pacman) x_pkg_run pacman "$pflag" --noconfirm "${pkgs[@]}" ;;
         *)      x_pkg_die "no package manager (xpm/pacman) found" ;;
     esac
@@ -184,12 +192,12 @@ x_pkg_available_pkg() {
     fi
 }
 
-# xpm has no `-Qo` yet: use pacman's database if it exists, otherwise print
-# nothing and fail. Never guesses ownership.
+# xpm has no `-Qo` yet. Do not silently fall back to pacman: in the xpm
+# backend ownership is unknown, and callers must handle that.
 x_pkg_owner() {
     local path="${1:-}" out owner
     [[ -n "$path" ]] || return 1
-    x_pkg_available_pacman || return 1
+    [[ "$(x_pkg_backend)" == "pacman" ]] || return 1
     out="$(pacman -Qo -- "$path" 2>/dev/null)" || return 1
     owner="$(printf '%s\n' "$out" | sed -n 's/.* is owned by \([^ ]*\).*/\1/p' | head -1)"
     [[ -n "$owner" ]] || return 1
@@ -207,20 +215,9 @@ x_pkg_sync() {
     X_PKG_LAST_BACKEND="$backend"
 }
 
-# Best-effort mirror of xpm's local database into pacman's, so pacman-based
-# tools (mkinitcpio hooks, generations) keep seeing xpm-managed packages.
-x_pkg_sync_mirror() {
-    x_pkg_available_xpm || return 0
-    [[ -d "$(x_pkg_pacman_db)" ]] || return 0
-    local -a args=(sync-pacman-db)
-    if [[ "$(x_pkg_pacman_db)" != "/var/lib/pacman" ]]; then
-        args+=(--pacman-db "$(x_pkg_pacman_db)")
-    fi
-    if ! x_pkg_run xpm "${args[@]}"; then
-        x_pkg_warn "xpm sync-pacman-db failed; pacman's view may be stale"
-    fi
-    return 0
-}
+# Native xpm mode does not mirror transactions into pacman's database.
+# Keep this as a compatibility no-op so existing callers stay valid.
+x_pkg_sync_mirror() { return 0; }
 
 x_pkg_depmod() {
     x_pkg_have_cmd depmod || return 0

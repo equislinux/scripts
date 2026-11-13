@@ -508,7 +508,16 @@ systemctl --user enable easyeffects.service 2>/dev/null || true
 # there, complete the equisdots GPU-mode feature (envycontrol + sudoers rule)
 # only if it is missing.
 if has_cmd lspci && lspci 2>/dev/null | grep -qiE 'vga.*nvidia|3d.*nvidia'; then
-    if ! root pacman -Qq nvidia nvidia-dkms nvidia-open nvidia-open-dkms >/dev/null 2>&1; then
+    nvidia_installed=0
+    if has_cmd xpm; then
+        for nvidia_pkg in nvidia nvidia-dkms nvidia-open nvidia-open-dkms; do
+            if xpm query "$nvidia_pkg" 2>/dev/null | awk -v want="$nvidia_pkg" '$1 == want { found = 1 } END { exit !found }'; then
+                nvidia_installed=1
+                break
+            fi
+        done
+    fi
+    if [[ "$nvidia_installed" -eq 0 ]]; then
         warn "NVIDIA GPU without a driver: falling back to the equisdots NVIDIA setup"
         bash "$HYPR_SRC/install.sh" --nvidia-only -y || warn "NVIDIA fallback failed; run: sudo bash $HYPR_SRC/install.sh --nvidia-only"
     elif ! has_cmd envycontrol; then

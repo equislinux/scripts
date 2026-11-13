@@ -59,7 +59,7 @@ fi
 # --yes is kept for CLI compatibility: the helper transactions are always
 # non-interactive. Match the previous `pacman -R` behavior (keep deps and
 # configuration files).
-X_GEN_SKIP=1 x_pkg_remove "${pkgs[@]}"
+X_GEN_SKIP=1 X_PKG_NO_ALPM_HOOKS=1 x_pkg_remove "${pkgs[@]}"
 if [[ "${X_PKG_LAST_BACKEND:-}" == "xpm" ]]; then
     x_pkg_sync_mirror || true
 fi

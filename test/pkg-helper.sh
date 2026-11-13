@@ -160,9 +160,12 @@ else
     check "installed check rejects a missing package" true
 fi
 : > "$LOG"
-check "owner falls back to pacman -Qo under xpm" \
-    test "$(x_pkg_owner /usr/bin/foo)" = "foo"
-check "owner query used pacman" grep -q '^pacman -Qo -- /usr/bin/foo' "$LOG"
+if x_pkg_owner /usr/bin/foo >/dev/null 2>&1; then
+    check "owner does not fall back to pacman under xpm" false
+else
+    check "owner does not fall back to pacman under xpm" true
+fi
+check "owner query did not use pacman" bash -c '! grep -q "^pacman " "$1"' _ "$LOG"
 check "sync package availability uses xpm info" x_pkg_available_pkg foo
 
 : > "$LOG"
@@ -173,11 +176,7 @@ check "pacman -Sy fallback" grep -qx 'pacman -Sy' "$LOG"
 
 : > "$LOG"
 x_pkg_sync_mirror
-check "mirror runs after xpm operations" \
-    grep -qx "xpm sync-pacman-db --pacman-db $TMP/pacmandb" "$LOG"
-: > "$LOG"
-X_PKG_PACMAN_DB="$TMP/missing" x_pkg_sync_mirror
-check "mirror is skipped without a pacman database" test ! -s "$LOG"
+check "xpm sync-pacman-db is not called" test ! -s "$LOG"
 
 echo "== generation guard =="
 : > "$LOG"
