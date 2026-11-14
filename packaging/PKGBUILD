@@ -5,7 +5,7 @@ pkgrel=52
 pkgdesc="x provisioning payload and CLI (reboot)"
 arch=('any')
 url="https://github.com/equislinux/scripts"
-license=('MIT')
+license=('GPL-3.0-or-later')
 install=x-scripts.install
 # The engine shells out to these core tools plus btrfs-progs. pacman is only
 # an optional fallback for the explicit pacman backend (see optdepends).
