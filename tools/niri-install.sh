@@ -50,6 +50,19 @@ fi
 
 [[ -x "$SRC/bin/dotsniri" ]] || error "niri-meta checkout is incomplete: $SRC/bin/dotsniri missing"
 
+# niri-meta's upstream Arch template hardcodes pacman. On X we must use xpm,
+# with xpm-aur for the AUR-only packages. Patch the freshly cloned template
+# before the system phase runs; keep a local backup for debugging.
+if [[ -f "$SRC/system/install-arch.sh" ]] && command -v xpm-aur >/dev/null 2>&1; then
+    cp -f "$SRC/system/install-arch.sh" "$SRC/system/install-arch.sh.xpm-backup"
+    perl -0pi -e '
+        s/sudo pacman -Sp/sudo xpm install --print/g;
+        s/sudo pacman -S/sudo xpm install/g;
+        s/pacman_args\+=\(--noconfirm\)/pacman_args+=(--no-confirm)/g;
+        s/AUR_HELPER=""\nensure_aur_helper\(\) \{\n/AUR_HELPER="xpm-aur"\nensure_aur_helper() {\n    [[ -n "$AUR_HELPER" ]] && return 0\n/;
+    ' "$SRC/system/install-arch.sh"
+fi
+
 log "installing the equisdots niri stack (this needs network and may take a while)"
 "$SRC/bin/dotsniri" setup -y
 
